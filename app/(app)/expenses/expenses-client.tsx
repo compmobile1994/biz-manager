@@ -19,10 +19,12 @@ export function ExpensesClient({
   initialExpenses,
   categories: initialCategories,
   vendors,
+  vendorCategoryMap,
 }: {
   initialExpenses: Expense[];
   categories: ExpenseCategory[];
   vendors: string[];
+  vendorCategoryMap: Record<string, string>;
 }) {
   const supabase = createClient();
   const { toast } = useToast();
@@ -318,7 +320,21 @@ export function ExpensesClient({
                 <Input
                   list="vendors-list"
                   value={editing.vendor ?? ''}
-                  onChange={(e) => setEditing({ ...editing, vendor: e.target.value })}
+                  onChange={(e) => {
+                    const newVendor = e.target.value;
+                    const remembered = vendorCategoryMap[newVendor];
+                    setEditing((cur) => ({
+                      ...cur,
+                      vendor: newVendor,
+                      // Auto-fill category if we recognize the vendor and the user
+                      // hasn't already chosen a different category for THIS expense.
+                      category_id:
+                        remembered &&
+                        (!cur?.category_id || cur.category_id === vendorCategoryMap[cur?.vendor ?? ''])
+                          ? remembered
+                          : cur?.category_id,
+                    }));
+                  }}
                   placeholder="הקלד או בחר ספק קיים"
                   autoComplete="off"
                 />
@@ -329,7 +345,7 @@ export function ExpensesClient({
                 </datalist>
                 {vendors.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    💡 {vendors.length} ספקים שמורים — תתחיל להקליד וייצא הצעות
+                    💡 {vendors.length} ספקים שמורים · קטגוריה תיבחר אוטומטית לספק מוכר
                   </p>
                 )}
               </div>

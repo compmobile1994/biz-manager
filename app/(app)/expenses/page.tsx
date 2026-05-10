@@ -15,6 +15,16 @@ export default async function ExpensesPage() {
   }
   const vendors = [...vendorSet].sort((a, b) => a.localeCompare(b, 'he'));
 
+  // Build vendor→category memory: most-recent category used per vendor.
+  // Used to auto-pick the category when the user types a known vendor again.
+  const vendorCategoryMap: Record<string, string> = {};
+  // expenses are already sorted by expense_date desc; first occurrence wins (= most recent)
+  for (const e of expenses ?? []) {
+    if (e.vendor && e.category_id && !vendorCategoryMap[e.vendor]) {
+      vendorCategoryMap[e.vendor] = e.category_id;
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
@@ -25,6 +35,7 @@ export default async function ExpensesPage() {
         initialExpenses={expenses ?? []}
         categories={categories ?? []}
         vendors={vendors}
+        vendorCategoryMap={vendorCategoryMap}
       />
     </div>
   );
