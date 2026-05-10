@@ -1,0 +1,16 @@
+{
+  "name": "ניהול עסק",
+  "short_name": "ניהול עסק",
+  "description": "ניהול קבלות, חשבוניות, הוצאות ודוח שנתי לעוסק פטור",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "lang": "he",
+  "dir": "rtl",
+  "scope": "/",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
