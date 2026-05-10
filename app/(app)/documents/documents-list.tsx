@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { DocumentRow, DocumentType } from '@/lib/supabase/types';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -82,21 +83,15 @@ export function DocumentsList({ initial }: { initial: DocumentRow[] }) {
           <div className="flex flex-wrap gap-2 items-center">
             <div className="flex items-center gap-2">
               <label className="text-sm text-muted-foreground whitespace-nowrap">מתאריך</label>
-              <Input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="w-44"
-              />
+              <div className="w-44">
+                <DatePicker value={fromDate} onChange={setFromDate} />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-muted-foreground whitespace-nowrap">עד תאריך</label>
-              <Input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="w-44"
-              />
+              <div className="w-44">
+                <DatePicker value={toDate} onChange={setToDate} />
+              </div>
             </div>
           </div>
         </CardContent>
