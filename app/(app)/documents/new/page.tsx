@@ -2,12 +2,55 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { DocumentForm } from './document-form';
 
-export default async function NewDocumentPage() {
+export default async function NewDocumentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ duplicate?: string }>;
+}) {
+  const params = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // If user clicked "duplicate" on a past receipt, fetch its data to pre-fill
+  let prefill: any = null;
+  if (params.duplicate) {
+    const [{ data: srcDoc }, { data: srcItems }, { data: srcPayment }] = await Promise.all([
+      supabase.from('documents').select('*').eq('id', params.duplicate).maybeSingle(),
+      supabase.from('document_items').select('*').eq('document_id', params.duplicate).order('sort_order'),
+      supabase.from('payments').select('*').eq('document_id', params.duplicate).maybeSingle(),
+    ]);
+    if (srcDoc) {
+      prefill = {
+        document_type: srcDoc.document_type,
+        customer_id: srcDoc.customer_id,
+        customer_name: srcDoc.customer_name_snapshot,
+        customer_tax_id: srcDoc.customer_tax_id_snapshot ?? '',
+        customer_address: srcDoc.customer_address_snapshot ?? '',
+        notes: srcDoc.notes ?? '',
+        lines: (srcItems ?? []).map((it: any) => ({
+          saved_item_id: it.saved_item_id,
+          description: it.description,
+          quantity: Number(it.quantity),
+          unit_price: Number(it.unit_price),
+        })),
+        payment: srcPayment
+          ? {
+              method: srcPayment.method,
+              card_last4: srcPayment.card_last4 ?? '',
+              card_holder: srcPayment.card_holder ?? '',
+              auth_code: srcPayment.auth_code ?? '',
+              check_number: srcPayment.check_number ?? '',
+              check_bank: srcPayment.check_bank ?? '',
+              transfer_ref: srcPayment.transfer_ref ?? '',
+            }
+          : null,
+        sourceNumber: srcDoc.number,
+      };
+    }
+  }
 
   const { data: settings } = await supabase
     .from('business_settings')
@@ -58,12 +101,17 @@ export default async function NewDocumentPage() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold">מסמך חדש</h1>
-        <p className="text-muted-foreground">הוצאת קבלה / חשבונית עסקה</p>
+        <p className="text-muted-foreground">
+          {prefill
+            ? `שכפול קבלה #${prefill.sourceNumber} - בדוק את הפרטים, שנה אם צריך, ואז אשר`
+            : 'הוצאת קבלה / חשבונית עסקה'}
+        </p>
       </div>
       <DocumentForm
         customers={customers ?? []}
         savedItems={items ?? []}
         nextNumbers={nextNumbers}
+        prefill={prefill}
         settings={{
           business_name: settings.business_name,
           owner_name: (settings as any).owner_name ?? null,

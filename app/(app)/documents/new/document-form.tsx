@@ -33,6 +33,26 @@ function emptyLine(): Line {
   return { saved_item_id: null, description: '', quantity: 1, unit_price: 0 };
 }
 
+interface PrefillData {
+  document_type: DocumentType;
+  customer_id: string | null;
+  customer_name: string;
+  customer_tax_id: string;
+  customer_address: string;
+  notes: string;
+  lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number }[];
+  payment: {
+    method: PaymentMethod;
+    card_last4: string;
+    card_holder: string;
+    auth_code: string;
+    check_number: string;
+    check_bank: string;
+    transfer_ref: string;
+  } | null;
+  sourceNumber?: number;
+}
+
 export function DocumentForm({
   customers,
   savedItems,
@@ -40,6 +60,7 @@ export function DocumentForm({
   logoUrl,
   signatureUrl,
   nextNumbers,
+  prefill,
 }: {
   customers: CustomerLite[];
   savedItems: SavedItemLite[];
@@ -47,29 +68,34 @@ export function DocumentForm({
   logoUrl: string | null;
   signatureUrl: string | null;
   nextNumbers: Record<string, number>;
+  prefill?: PrefillData | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
   const { toast } = useToast();
   const [step, setStep] = useState<'edit' | 'preview'>('edit');
 
-  const [docType, setDocType] = useState<DocumentType>('receipt');
+  const [docType, setDocType] = useState<DocumentType>(prefill?.document_type ?? 'receipt');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
-  const [customerId, setCustomerId] = useState<string>('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerTaxId, setCustomerTaxId] = useState('');
-  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerId, setCustomerId] = useState<string>(prefill?.customer_id ?? '');
+  const [customerName, setCustomerName] = useState(prefill?.customer_name ?? '');
+  const [customerTaxId, setCustomerTaxId] = useState(prefill?.customer_tax_id ?? '');
+  const [customerAddress, setCustomerAddress] = useState(prefill?.customer_address ?? '');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState<Line[]>([emptyLine()]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-  const [cardLast4, setCardLast4] = useState('');
-  const [cardHolder, setCardHolder] = useState('');
-  const [authCode, setAuthCode] = useState('');
-  const [checkNumber, setCheckNumber] = useState('');
-  const [checkBank, setCheckBank] = useState('');
-  const [transferRef, setTransferRef] = useState('');
+  const [notes, setNotes] = useState(prefill?.notes ?? '');
+  const [lines, setLines] = useState<Line[]>(
+    prefill?.lines && prefill.lines.length > 0
+      ? prefill.lines.map((l) => ({ ...l }))
+      : [emptyLine()],
+  );
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(prefill?.payment?.method ?? 'cash');
+  const [cardLast4, setCardLast4] = useState(prefill?.payment?.card_last4 ?? '');
+  const [cardHolder, setCardHolder] = useState(prefill?.payment?.card_holder ?? '');
+  const [authCode, setAuthCode] = useState(prefill?.payment?.auth_code ?? '');
+  const [checkNumber, setCheckNumber] = useState(prefill?.payment?.check_number ?? '');
+  const [checkBank, setCheckBank] = useState(prefill?.payment?.check_bank ?? '');
+  const [transferRef, setTransferRef] = useState(prefill?.payment?.transfer_ref ?? '');
   const [submitting, setSubmitting] = useState(false);
 
   const total = useMemo(() => lines.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0), 0), [lines]);

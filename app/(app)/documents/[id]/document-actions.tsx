@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone, Landmark } from 'lucide-react';
+import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone, Landmark, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
@@ -229,6 +229,15 @@ export function DocumentActions({
         <Button variant="outline" size="sm" onClick={() => setSmsDialog(true)}>
           <Phone className="h-4 w-4" />
           SMS
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => router.push(`/documents/new?duplicate=${docId}`)}
+          title="צור קבלה חדשה עם אותם פרטים (אותו לקוח, אותם פריטים)"
+        >
+          <Copy className="h-4 w-4" />
+          שכפל קבלה
         </Button>
       </div>
 
