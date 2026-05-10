@@ -16,6 +16,15 @@ interface DatePickerProps {
   className?: string;
 }
 
+const HEBREW_MONTHS = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+];
+
+const CURRENT_YEAR = new Date().getFullYear();
+// 10 years back, 5 years forward — enough for both historical receipts and planning
+const YEAR_RANGE = Array.from({ length: 16 }, (_, i) => CURRENT_YEAR - 10 + i);
+
 function isoToDate(iso: string): Date | undefined {
   if (!iso) return undefined;
   const d = new Date(iso + 'T00:00:00');
@@ -85,26 +94,51 @@ export function DatePicker({ value, onChange, className }: DatePickerProps) {
           className="z-50 rounded-md border bg-white shadow-lg p-3"
           dir="rtl"
         >
-          {/* Custom caption with prev/next month buttons */}
-          <div className="flex items-center justify-between mb-2 px-1">
+          {/* Custom caption: prev/next month buttons + month/year quick selectors */}
+          <div className="flex items-center justify-between mb-2 px-1 gap-2">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 shrink-0"
               title="חודש קודם"
               onClick={() => shift(-1)}
             >
               <ChevronUp className="h-4 w-4" />
             </Button>
-            <div className="font-semibold text-sm">
-              {month.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })}
+            <div className="flex gap-1 flex-1 min-w-0">
+              <select
+                className="h-8 rounded border bg-white px-1 text-sm flex-1 min-w-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={month.getMonth()}
+                onChange={(e) => {
+                  const d = new Date(month);
+                  d.setMonth(Number(e.target.value));
+                  setMonth(d);
+                }}
+              >
+                {HEBREW_MONTHS.map((label, i) => (
+                  <option key={i} value={i}>{label}</option>
+                ))}
+              </select>
+              <select
+                className="h-8 rounded border bg-white px-1 text-sm w-20 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={month.getFullYear()}
+                onChange={(e) => {
+                  const d = new Date(month);
+                  d.setFullYear(Number(e.target.value));
+                  setMonth(d);
+                }}
+              >
+                {YEAR_RANGE.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 shrink-0"
               title="חודש הבא"
               onClick={() => shift(+1)}
             >
