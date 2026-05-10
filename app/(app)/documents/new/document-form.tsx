@@ -173,7 +173,8 @@ export function DocumentForm({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'שגיאה ביצירת המסמך');
       toast({ title: 'המסמך נוצר', description: `${documentTypeLabel[docType]} #${json.number}` });
-      router.push(`/documents/${json.id}`);
+      // Auto-open WhatsApp with receipt + Bit info after creation
+      router.push(`/documents/${json.id}?share=whatsapp`);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'שגיאה', description: e.message });
     } finally {
