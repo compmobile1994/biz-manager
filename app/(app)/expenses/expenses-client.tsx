@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import type { Expense, ExpenseCategory, PaymentMethod } from '@/lib/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateInput } from '@/components/ui/date-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
@@ -308,7 +309,10 @@ export function ExpensesClient({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>תאריך</Label>
-                  <Input type="date" value={editing.expense_date ?? ''} onChange={(e) => setEditing({ ...editing, expense_date: e.target.value })} />
+                  <DateInput
+                    value={editing.expense_date ?? ''}
+                    onChange={(v) => setEditing({ ...editing, expense_date: v })}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>סכום (₪)</Label>
