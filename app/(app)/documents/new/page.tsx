@@ -81,7 +81,7 @@ export default async function NewDocumentPage({
     signatureUrl = signed?.signedUrl ?? null;
   }
 
-  const [{ data: customers }, { data: items }, { data: counters }, pastItemsRes] = await Promise.all([
+  const [{ data: customers }, { data: items }, { data: counters }, pastItemsRes, recentLinesRes] = await Promise.all([
     supabase.from('customers').select('id, name, email, phone, address, tax_id').order('name'),
     supabase.from('saved_items').select('id, name, description, default_price').eq('is_active', true).order('name'),
     supabase.from('document_counters').select('document_type, last_number').eq('user_id', user.id),
@@ -91,6 +91,12 @@ export default async function NewDocumentPage({
       .select('phone_number, documents!inner(customer_id)')
       .not('phone_number', 'is', null)
       .limit(2000),
+    // For description autocomplete: fetch recent unique line item descriptions + prices
+    supabase
+      .from('document_items')
+      .select('description, unit_price')
+      .order('id', { ascending: false })
+      .limit(500),
   ]);
 
   // Build customer_id → unique phone numbers map for autocomplete
@@ -101,6 +107,16 @@ export default async function NewDocumentPage({
     if (!phone || !cid) continue;
     if (!customerPhones[cid]) customerPhones[cid] = [];
     if (!customerPhones[cid].includes(phone)) customerPhones[cid].push(phone);
+  }
+
+  // Build description → recent unit_price map (most recent price per description wins)
+  const recentItems: { description: string; unit_price: number }[] = [];
+  const seenDesc = new Set<string>();
+  for (const row of (recentLinesRes.data as any[] | null) ?? []) {
+    const desc = row.description?.trim();
+    if (!desc || seenDesc.has(desc)) continue;
+    seenDesc.add(desc);
+    recentItems.push({ description: desc, unit_price: Number(row.unit_price) });
   }
 
   // Build a map of expected next numbers per document type
@@ -130,6 +146,7 @@ export default async function NewDocumentPage({
         nextNumbers={nextNumbers}
         prefill={prefill}
         customerPhones={customerPhones}
+        recentItems={recentItems}
         settings={{
           business_name: settings.business_name,
           owner_name: (settings as any).owner_name ?? null,

@@ -63,6 +63,7 @@ export function DocumentForm({
   nextNumbers,
   prefill,
   customerPhones,
+  recentItems,
 }: {
   customers: CustomerLite[];
   savedItems: SavedItemLite[];
@@ -72,6 +73,7 @@ export function DocumentForm({
   nextNumbers: Record<string, number>;
   prefill?: PrefillData | null;
   customerPhones: Record<string, string[]>;
+  recentItems: { description: string; unit_price: number }[];
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -351,6 +353,7 @@ export function DocumentForm({
               onRemove={() => removeLine(idx)}
               canRemove={lines.length > 1}
               phoneSuggestions={customerId ? customerPhones[customerId] ?? [] : []}
+              recentItems={recentItems}
             />
           ))}
           <div className="border-t pt-3 flex justify-between items-center">
@@ -444,6 +447,7 @@ function LineRow({
   onRemove,
   canRemove,
   phoneSuggestions,
+  recentItems,
 }: {
   idx: number;
   line: Line;
@@ -453,8 +457,22 @@ function LineRow({
   onRemove: () => void;
   canRemove: boolean;
   phoneSuggestions: string[];
+  recentItems: { description: string; unit_price: number }[];
 }) {
   const phonesListId = `phones-list-${idx}`;
+  const itemsListId = `items-list-${idx}`;
+
+  // When user picks/types a description that matches a known item, auto-fill the price.
+  function handleDescriptionChange(newDesc: string) {
+    const match = recentItems.find((it) => it.description === newDesc);
+    if (match) {
+      // Pre-fill price only if user hasn't manually set one (or the price was 0)
+      const shouldOverride = !line.unit_price || line.unit_price === 0;
+      onChange({ description: newDesc, unit_price: shouldOverride ? match.unit_price : line.unit_price });
+    } else {
+      onChange({ description: newDesc });
+    }
+  }
   const lineTotal = Number(line.quantity || 0) * Number(line.unit_price || 0);
   return (
     <div className="rounded-md border p-3 space-y-3 bg-muted/30">
@@ -482,12 +500,26 @@ function LineRow({
           </div>
         )}
         <div className={`${savedItems.length > 0 ? 'md:col-span-8' : 'md:col-span-12'} space-y-1`}>
-          <Label className="text-xs">תיאור הפריט (חובה)</Label>
+          <Label className="text-xs">
+            תיאור הפריט (חובה)
+            {recentItems.length > 0 && (
+              <span className="text-blue-600 mr-2">💡 {recentItems.length} פעולות קודמות</span>
+            )}
+          </Label>
           <Input
-            placeholder="לדוגמה: ייעוץ עסקי 1 שעה"
+            list={itemsListId}
+            placeholder="לדוגמה: טוקמן סלקום 70 ש״ח"
             value={line.description}
-            onChange={(e) => onChange({ description: e.target.value })}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
+            autoComplete="off"
           />
+          {recentItems.length > 0 && (
+            <datalist id={itemsListId}>
+              {recentItems.map((it) => (
+                <option key={it.description} value={it.description} />
+              ))}
+            </datalist>
+          )}
         </div>
         <div className="md:col-span-3 space-y-1">
           <Label className="text-xs">כמות</Label>
