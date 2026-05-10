@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone } from 'lucide-react';
+import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone, Landmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,10 @@ export function DocumentActions({
   customerPhone,
   businessName,
   businessPhone,
+  businessBankName,
+  businessBankBranch,
+  businessBankAccount,
+  businessOwnerName,
   documentNumber,
   docType,
   docTotal,
@@ -28,6 +32,10 @@ export function DocumentActions({
   customerPhone: string | null;
   businessName: string;
   businessPhone: string | null;
+  businessBankName: string | null;
+  businessBankBranch: string | null;
+  businessBankAccount: string | null;
+  businessOwnerName: string | null;
   documentNumber: number;
   docType: string;
   docTotal: number;
@@ -143,6 +151,40 @@ export function DocumentActions({
     window.open(url, '_blank');
   }
 
+  function shareBankTransferRequest() {
+    if (!businessBankAccount || !businessBankName) {
+      toast({
+        variant: 'destructive',
+        title: 'חסרים פרטי בנק',
+        description: 'הוסף שם בנק ומספר חשבון בהגדרות (הם לא מוצגים בקבלה - רק נשלחים ב-WhatsApp)',
+      });
+      return;
+    }
+    const formattedAmount = new Intl.NumberFormat('he-IL', {
+      style: 'currency',
+      currency: 'ILS',
+      maximumFractionDigits: 2,
+    }).format(docTotal);
+    const accountOwner = businessOwnerName || businessName;
+
+    const lines = [
+      `היי ${customerName} 👋`,
+      ``,
+      `לתשלום של ${formattedAmount} בהעברה בנקאית:`,
+      `🏦 ${businessBankName}`,
+    ];
+    if (businessBankBranch) lines.push(`📍 סניף: ${businessBankBranch}`);
+    lines.push(`💳 חשבון: ${businessBankAccount}`);
+    lines.push(`👤 על שם: ${accountOwner}`);
+    lines.push('');
+    lines.push('תודה רבה! 🙏');
+
+    const msg = encodeURIComponent(lines.join('\n'));
+    const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+    const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
+    window.open(url, '_blank');
+  }
+
   async function sendSms() {
     if (!smsTo) return toast({ variant: 'destructive', title: 'יש להזין מספר טלפון' });
     if (!pdfUrl) return toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
@@ -179,6 +221,10 @@ export function DocumentActions({
         <Button variant="outline" size="sm" onClick={shareBitRequest}>
           <Smartphone className="h-4 w-4" />
           בקשת ביט
+        </Button>
+        <Button variant="outline" size="sm" onClick={shareBankTransferRequest}>
+          <Landmark className="h-4 w-4" />
+          בקשת העברה
         </Button>
         <Button variant="outline" size="sm" onClick={() => setSmsDialog(true)}>
           <Phone className="h-4 w-4" />
