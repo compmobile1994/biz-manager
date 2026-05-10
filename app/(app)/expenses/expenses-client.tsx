@@ -286,7 +286,7 @@ export function ExpensesClient({
               </div>
 
               <p className="text-xs text-muted-foreground">
-                💡 הצעות לעסק שלך: סלולר · מחשבים · מדפסות · תקשורת · אביזרים · שכירות · חשבונות · שיווק
+                💡 הצעות נפוצות: סלולר · מחשבים · מדפסות · תקשורת · אביזרים · ספקים וסחורה · שיווק · רכב
               </p>
             </CardContent>
           </Card>
