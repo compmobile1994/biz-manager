@@ -84,7 +84,7 @@ export default async function DashboardPage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-3xl font-bold">{stats.businessName ?? 'דשבורד'}</h1>
+          <h1 className="text-3xl font-bold">{stats.businessName ?? 'מסך הבית'}</h1>
           <p className="text-muted-foreground">סקירה כללית של העסק</p>
         </div>
         <Link href="/documents/new">

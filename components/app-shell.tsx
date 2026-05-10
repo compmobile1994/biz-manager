@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { ServiceWorkerRegister } from './service-worker-register';
 
 const NAV = [
-  { href: '/', label: 'דשבורד', icon: LayoutDashboard },
+  { href: '/', label: 'מסך הבית', icon: LayoutDashboard },
   { href: '/documents', label: 'מסמכים', icon: FileText },
   { href: '/customers', label: 'לקוחות', icon: Users },
   { href: '/saved-items', label: 'פריטים שמורים', icon: Package },
