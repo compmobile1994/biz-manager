@@ -95,19 +95,29 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               </tr>
             </thead>
             <tbody>
-              {(items ?? []).map((it: any) => (
-                <tr key={it.id} className="border-t">
-                  <td className="p-3">
-                    {it.description}
-                    {it.phone_number && (
-                      <span className="text-xs text-muted-foreground mr-2">📱 {it.phone_number}</span>
-                    )}
-                  </td>
-                  <td className="p-3">{it.quantity}</td>
-                  <td className="p-3">{formatCurrency(Number(it.unit_price))}</td>
-                  <td className="p-3 font-medium">{formatCurrency(Number(it.line_total))}</td>
-                </tr>
-              ))}
+              {(items ?? []).map((it: any) => {
+                const extras: string[] = [];
+                if (it.phone_number) extras.push(`📱 ${it.phone_number}`);
+                if (it.imei) extras.push(`IMEI: ${it.imei}`);
+                if (it.warranty_months) {
+                  const d = new Date(doc.issue_date + 'T00:00:00');
+                  d.setMonth(d.getMonth() + it.warranty_months);
+                  extras.push(`🛡️ אחריות ${it.warranty_months} ח׳ (עד ${formatDate(d)})`);
+                }
+                return (
+                  <tr key={it.id} className="border-t">
+                    <td className="p-3">
+                      <div>{it.description}</div>
+                      {extras.length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">{extras.join(' · ')}</div>
+                      )}
+                    </td>
+                    <td className="p-3">{it.quantity}</td>
+                    <td className="p-3">{formatCurrency(Number(it.unit_price))}</td>
+                    <td className="p-3 font-medium">{formatCurrency(Number(it.line_total))}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="border-t-2 font-bold bg-muted/30">

@@ -36,6 +36,9 @@ export default async function NewDocumentPage({
           quantity: Number(it.quantity),
           unit_price: Number(it.unit_price),
           phone_number: it.phone_number ?? '',
+          // For duplicated device sales: clear IMEI (each device has a unique IMEI)
+          imei: '',
+          warranty_months: it.warranty_months ?? null,
         })),
         payment: srcPayment
           ? {

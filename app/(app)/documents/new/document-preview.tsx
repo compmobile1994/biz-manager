@@ -21,6 +21,8 @@ export interface PreviewLine {
   quantity: number;
   unit_price: number;
   phone_number?: string;
+  imei?: string;
+  warranty_months?: number | null;
 }
 
 export interface PreviewData {
@@ -67,6 +69,18 @@ export function DocumentPreview({
   const docLabel = documentTypeLabel[data.document_type];
   const dateStr = data.issue_date ? formatDate(data.issue_date) : '—';
   const isSingleLine = data.lines.length === 1 && Number(data.lines[0]?.quantity ?? 0) === 1;
+
+  function lineExtras(l: PreviewLine): string[] {
+    const extras: string[] = [];
+    if (l.phone_number) extras.push(`📱 ${l.phone_number}`);
+    if (l.imei) extras.push(`IMEI: ${l.imei}`);
+    if (l.warranty_months && l.warranty_months > 0) {
+      const d = new Date(data.issue_date + 'T00:00:00');
+      d.setMonth(d.getMonth() + l.warranty_months);
+      extras.push(`🛡️ אחריות ${l.warranty_months} ח׳ (עד ${formatDate(d)})`);
+    }
+    return extras;
+  }
 
   const methodSuffix = [
     data.card_last4 ? `(${data.card_last4})` : '',
@@ -134,12 +148,12 @@ export function DocumentPreview({
       {/* Items */}
       <div className="px-8 py-4">
         {isSingleLine && data.lines[0]?.description ? (
-          <p className="text-base font-bold">
-            {data.lines[0].description}
-            {data.lines[0].phone_number && (
-              <span className="text-xs text-slate-500 mr-2 font-normal">📱 {data.lines[0].phone_number}</span>
+          <div>
+            <p className="text-base font-bold">{data.lines[0].description}</p>
+            {lineExtras(data.lines[0]).length > 0 && (
+              <p className="text-xs text-slate-500 mt-1">{lineExtras(data.lines[0]).join(' · ')}</p>
             )}
-          </p>
+          </div>
         ) : data.lines.length === 0 || data.lines.every((l) => !l.description.trim()) ? (
           <p className="text-sm text-slate-400 italic">— אין שורות —</p>
         ) : (
@@ -155,12 +169,13 @@ export function DocumentPreview({
             <tbody>
               {data.lines.map((l, i) => {
                 const lineTotal = Number(l.quantity || 0) * Number(l.unit_price || 0);
+                const extras = lineExtras(l);
                 return (
                   <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : ''}>
                     <td className="px-3 py-2">
-                      {l.description}
-                      {l.phone_number && (
-                        <span className="text-xs text-slate-500 mr-2">📱 {l.phone_number}</span>
+                      <div>{l.description}</div>
+                      {extras.length > 0 && (
+                        <div className="text-xs text-slate-500 mt-0.5">{extras.join(' · ')}</div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">{l.quantity}</td>

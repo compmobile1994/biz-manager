@@ -67,6 +67,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         unit_price: Number(it.unit_price),
         line_total: Number(it.line_total),
         phone_number: it.phone_number ?? null,
+        imei: it.imei ?? null,
+        warranty_months: it.warranty_months ?? null,
       })),
       payment: payments && payments.length > 0
         ? {

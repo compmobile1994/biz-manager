@@ -25,13 +25,15 @@ interface Line {
   quantity: number;
   unit_price: number;
   phone_number: string;
+  imei: string;
+  warranty_months: string; // kept as string for input handling, parsed to int on submit
 }
 
 const DOC_TYPES: DocumentType[] = ['receipt', 'invoice', 'invoice_receipt'];
 const PAY_METHODS: PaymentMethod[] = ['cash', 'credit_card', 'bank_transfer', 'bit', 'check', 'other'];
 
 function emptyLine(): Line {
-  return { saved_item_id: null, description: '', quantity: 1, unit_price: 0, phone_number: '' };
+  return { saved_item_id: null, description: '', quantity: 1, unit_price: 0, phone_number: '', imei: '', warranty_months: '' };
 }
 
 interface PrefillData {
@@ -41,7 +43,7 @@ interface PrefillData {
   customer_tax_id: string;
   customer_address: string;
   notes: string;
-  lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number; phone_number?: string }[];
+  lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number; phone_number?: string; imei?: string; warranty_months?: number | null }[];
   payment: {
     method: PaymentMethod;
     card_last4: string;
@@ -97,6 +99,8 @@ export function DocumentForm({
           quantity: l.quantity,
           unit_price: l.unit_price,
           phone_number: l.phone_number ?? '',
+          imei: l.imei ?? '',
+          warranty_months: l.warranty_months ? String(l.warranty_months) : '',
         }))
       : [emptyLine()],
   );
@@ -194,6 +198,8 @@ export function DocumentForm({
             line_total: Number(l.quantity) * Number(l.unit_price),
             sort_order: i,
             phone_number: l.phone_number?.trim() || null,
+            imei: l.imei?.trim() || null,
+            warranty_months: l.warranty_months && Number(l.warranty_months) > 0 ? Number(l.warranty_months) : null,
           })),
           payment: docNeedsPayment
             ? {
@@ -240,6 +246,8 @@ export function DocumentForm({
               quantity: l.quantity,
               unit_price: l.unit_price,
               phone_number: l.phone_number,
+              imei: l.imei,
+              warranty_months: l.warranty_months ? Number(l.warranty_months) : null,
             })),
             payment_method: paymentMethod,
             card_last4: cardLast4,
@@ -564,7 +572,28 @@ function LineRow({
             </datalist>
           )}
         </div>
-        <div className="md:col-span-12 flex items-end justify-end">
+        <div className="md:col-span-6 space-y-1">
+          <Label className="text-xs">IMEI (אופציונלי - למכירת מכשיר)</Label>
+          <Input
+            placeholder="15 ספרות, לדוגמה 351234567890123"
+            inputMode="numeric"
+            maxLength={20}
+            value={line.imei}
+            onChange={(e) => onChange({ imei: e.target.value })}
+          />
+        </div>
+        <div className="md:col-span-3 space-y-1">
+          <Label className="text-xs">אחריות (חודשים)</Label>
+          <Input
+            type="number"
+            min="0"
+            max="120"
+            placeholder="12"
+            value={line.warranty_months}
+            onChange={(e) => onChange({ warranty_months: e.target.value })}
+          />
+        </div>
+        <div className="md:col-span-3 flex items-end justify-end">
           <span className="text-sm font-semibold">סה״כ שורה: {formatCurrency(lineTotal)}</span>
         </div>
       </div>

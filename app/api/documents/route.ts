@@ -61,6 +61,8 @@ export async function POST(request: Request) {
       line_total: l.line_total,
       sort_order: l.sort_order,
       phone_number: l.phone_number ?? null,
+      imei: l.imei ?? null,
+      warranty_months: l.warranty_months ?? null,
     })),
   );
   if (linesErr) return NextResponse.json({ error: linesErr.message }, { status: 500 });

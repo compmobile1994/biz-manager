@@ -8,6 +8,8 @@ export const lineSchema = z.object({
   line_total: z.number().min(0),
   sort_order: z.number().int().nonnegative(),
   phone_number: z.string().nullable().optional(),
+  imei: z.string().nullable().optional(),
+  warranty_months: z.number().int().nullable().optional(),
 });
 
 export const paymentSchema = z.object({

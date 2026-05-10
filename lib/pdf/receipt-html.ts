@@ -5,7 +5,15 @@ import { documentTypeLabel, paymentMethodLabel, formatCurrency, formatDate } fro
 
 interface BuildArgs {
   doc: any;
-  lines: { description: string; quantity: number; unit_price: number; line_total: number; phone_number?: string | null }[];
+  lines: {
+    description: string;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+    phone_number?: string | null;
+    imei?: string | null;
+    warranty_months?: number | null;
+  }[];
   payment: { method: string; amount: number; card_last4?: string | null; auth_code?: string | null; check_number?: string | null; transfer_ref?: string | null } | null;
   settings: any;
   logoDataUrl?: string | null;
@@ -36,13 +44,24 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
 
   const isSingleSimple = lines.length === 1 && Number(lines[0].quantity) === 1;
 
-  // For each line, suffix description with the phone number if present.
+  // Calculate warranty expiry date from issue_date + months
+  function warrantyExpiry(months: number): string {
+    const d = new Date(doc.issue_date + 'T00:00:00');
+    d.setMonth(d.getMonth() + months);
+    return formatDate(d);
+  }
+
+  // For each line, suffix description with phone/IMEI/warranty if present.
   const renderDesc = (l: BuildArgs['lines'][number]): string => {
     const desc = escapeHtml(l.description);
-    if (l.phone_number) {
-      return `${desc} <span style="color:#64748b; font-size:9pt;">📱 ${escapeHtml(l.phone_number)}</span>`;
+    const extras: string[] = [];
+    if (l.phone_number) extras.push(`📱 ${escapeHtml(l.phone_number)}`);
+    if (l.imei) extras.push(`IMEI: ${escapeHtml(l.imei)}`);
+    if (l.warranty_months && l.warranty_months > 0) {
+      extras.push(`🛡️ אחריות ${l.warranty_months} חודשים (עד ${warrantyExpiry(l.warranty_months)})`);
     }
-    return desc;
+    if (extras.length === 0) return desc;
+    return `${desc}<br/><span style="color:#64748b; font-size:9pt;">${extras.join(' · ')}</span>`;
   };
 
   const itemsBlock = isSingleSimple
