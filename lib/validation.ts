@@ -7,6 +7,7 @@ export const lineSchema = z.object({
   unit_price: z.number().min(0),
   line_total: z.number().min(0),
   sort_order: z.number().int().nonnegative(),
+  phone_number: z.string().nullable().optional(),
 });
 
 export const paymentSchema = z.object({

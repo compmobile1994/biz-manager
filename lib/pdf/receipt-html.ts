@@ -5,7 +5,7 @@ import { documentTypeLabel, paymentMethodLabel, formatCurrency, formatDate } fro
 
 interface BuildArgs {
   doc: any;
-  lines: { description: string; quantity: number; unit_price: number; line_total: number }[];
+  lines: { description: string; quantity: number; unit_price: number; line_total: number; phone_number?: string | null }[];
   payment: { method: string; amount: number; card_last4?: string | null; auth_code?: string | null; check_number?: string | null; transfer_ref?: string | null } | null;
   settings: any;
   logoDataUrl?: string | null;
@@ -36,8 +36,17 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
 
   const isSingleSimple = lines.length === 1 && Number(lines[0].quantity) === 1;
 
+  // For each line, suffix description with the phone number if present.
+  const renderDesc = (l: BuildArgs['lines'][number]): string => {
+    const desc = escapeHtml(l.description);
+    if (l.phone_number) {
+      return `${desc} <span style="color:#64748b; font-size:9pt;">📱 ${escapeHtml(l.phone_number)}</span>`;
+    }
+    return desc;
+  };
+
   const itemsBlock = isSingleSimple
-    ? `<p style="font-size:14pt; font-weight:700; margin:0;">${escapeHtml(lines[0].description)}</p>`
+    ? `<p style="font-size:14pt; font-weight:700; margin:0;">${renderDesc(lines[0])}</p>`
     : `
       <table style="width:100%; border-collapse:collapse; font-size:10pt;">
         <thead>
@@ -51,7 +60,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
         <tbody>
           ${lines.map((l, i) => `
             <tr style="${i % 2 === 1 ? 'background:#f8fafc;' : ''}">
-              <td style="padding:8px;">${escapeHtml(l.description)}</td>
+              <td style="padding:8px;">${renderDesc(l)}</td>
               <td style="padding:8px; text-align:center;">${l.quantity}</td>
               <td style="padding:8px; text-align:left;">${escapeHtml(formatCurrency(l.unit_price))}</td>
               <td style="padding:8px; text-align:left; font-weight:600;">${escapeHtml(formatCurrency(l.line_total))}</td>

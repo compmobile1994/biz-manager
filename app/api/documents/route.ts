@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       unit_price: l.unit_price,
       line_total: l.line_total,
       sort_order: l.sort_order,
+      phone_number: l.phone_number ?? null,
     })),
   );
   if (linesErr) return NextResponse.json({ error: linesErr.message }, { status: 500 });

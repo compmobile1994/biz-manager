@@ -97,7 +97,12 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
             <tbody>
               {(items ?? []).map((it: any) => (
                 <tr key={it.id} className="border-t">
-                  <td className="p-3">{it.description}</td>
+                  <td className="p-3">
+                    {it.description}
+                    {it.phone_number && (
+                      <span className="text-xs text-muted-foreground mr-2">📱 {it.phone_number}</span>
+                    )}
+                  </td>
                   <td className="p-3">{it.quantity}</td>
                   <td className="p-3">{formatCurrency(Number(it.unit_price))}</td>
                   <td className="p-3 font-medium">{formatCurrency(Number(it.line_total))}</td>

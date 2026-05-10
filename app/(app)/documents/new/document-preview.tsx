@@ -20,6 +20,7 @@ export interface PreviewLine {
   description: string;
   quantity: number;
   unit_price: number;
+  phone_number?: string;
 }
 
 export interface PreviewData {
@@ -133,7 +134,12 @@ export function DocumentPreview({
       {/* Items */}
       <div className="px-8 py-4">
         {isSingleLine && data.lines[0]?.description ? (
-          <p className="text-base font-bold">{data.lines[0].description}</p>
+          <p className="text-base font-bold">
+            {data.lines[0].description}
+            {data.lines[0].phone_number && (
+              <span className="text-xs text-slate-500 mr-2 font-normal">📱 {data.lines[0].phone_number}</span>
+            )}
+          </p>
         ) : data.lines.length === 0 || data.lines.every((l) => !l.description.trim()) ? (
           <p className="text-sm text-slate-400 italic">— אין שורות —</p>
         ) : (
@@ -151,7 +157,12 @@ export function DocumentPreview({
                 const lineTotal = Number(l.quantity || 0) * Number(l.unit_price || 0);
                 return (
                   <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : ''}>
-                    <td className="px-3 py-2">{l.description}</td>
+                    <td className="px-3 py-2">
+                      {l.description}
+                      {l.phone_number && (
+                        <span className="text-xs text-slate-500 mr-2">📱 {l.phone_number}</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-center">{l.quantity}</td>
                     <td className="px-3 py-2 text-left">{formatCurrency(l.unit_price)}</td>
                     <td className="px-3 py-2 text-left font-semibold">{formatCurrency(lineTotal)}</td>
