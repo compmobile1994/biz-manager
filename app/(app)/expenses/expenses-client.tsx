@@ -15,7 +15,15 @@ import { formatCurrency, formatDate, paymentMethodLabel } from '@/lib/utils';
 
 const PAY_METHODS: PaymentMethod[] = ['cash', 'credit_card', 'bank_transfer', 'bit', 'check', 'other'];
 
-export function ExpensesClient({ initialExpenses, categories }: { initialExpenses: Expense[]; categories: ExpenseCategory[] }) {
+export function ExpensesClient({
+  initialExpenses,
+  categories,
+  vendors,
+}: {
+  initialExpenses: Expense[];
+  categories: ExpenseCategory[];
+  vendors: string[];
+}) {
   const supabase = createClient();
   const { toast } = useToast();
   const [list, setList] = useState<Expense[]>(initialExpenses);
@@ -163,7 +171,23 @@ export function ExpensesClient({ initialExpenses, categories }: { initialExpense
               </div>
               <div className="space-y-1.5">
                 <Label>ספק / מקור (חובה)</Label>
-                <Input value={editing.vendor ?? ''} onChange={(e) => setEditing({ ...editing, vendor: e.target.value })} />
+                <Input
+                  list="vendors-list"
+                  value={editing.vendor ?? ''}
+                  onChange={(e) => setEditing({ ...editing, vendor: e.target.value })}
+                  placeholder="הקלד או בחר ספק קיים"
+                  autoComplete="off"
+                />
+                <datalist id="vendors-list">
+                  {vendors.map((v) => (
+                    <option key={v} value={v} />
+                  ))}
+                </datalist>
+                {vendors.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    💡 {vendors.length} ספקים שמורים — תתחיל להקליד וייצא הצעות
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -194,14 +218,33 @@ export function ExpensesClient({ initialExpenses, categories }: { initialExpense
                 <Textarea value={editing.description ?? ''} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>צילום קבלה (מצלמה / קובץ)</Label>
-                <Input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  capture="environment"
-                  onChange={(e) => setEditing({ ...editing, _file: e.target.files?.[0] })}
-                />
-                {editing._file && <p className="text-xs text-muted-foreground">{editing._file.name}</p>}
+                <Label>צילום / קובץ קבלה</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Camera capture (mobile) */}
+                  <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-md p-3 cursor-pointer hover:bg-accent text-center">
+                    <Camera className="h-6 w-6" />
+                    <span className="text-xs font-medium">📷 צלם קבלה</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => setEditing({ ...editing, _file: e.target.files?.[0] })}
+                    />
+                  </label>
+                  {/* File upload (PDF email invoice / image from gallery) */}
+                  <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-md p-3 cursor-pointer hover:bg-accent text-center">
+                    <FileText className="h-6 w-6" />
+                    <span className="text-xs font-medium">📎 העלה קובץ / PDF</span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={(e) => setEditing({ ...editing, _file: e.target.files?.[0] })}
+                    />
+                  </label>
+                </div>
+                {editing._file && <p className="text-xs text-muted-foreground">📎 {editing._file.name}</p>}
                 {editing.receipt_url && !editing._file && <p className="text-xs text-muted-foreground">📎 קובץ קיים</p>}
               </div>
               <div className="flex justify-end gap-2 pt-2">

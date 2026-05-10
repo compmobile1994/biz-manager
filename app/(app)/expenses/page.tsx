@@ -8,13 +8,24 @@ export default async function ExpensesPage() {
     supabase.from('expense_categories').select('*').order('sort_order'),
   ]);
 
+  // Build a unique vendor list from past expenses for autocomplete
+  const vendorSet = new Set<string>();
+  for (const e of expenses ?? []) {
+    if (e.vendor) vendorSet.add(e.vendor);
+  }
+  const vendors = [...vendorSet].sort((a, b) => a.localeCompare(b, 'he'));
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold">הוצאות</h1>
         <p className="text-muted-foreground">רישום הוצאות עסקיות עם צילומי קבלות</p>
       </div>
-      <ExpensesClient initialExpenses={expenses ?? []} categories={categories ?? []} />
+      <ExpensesClient
+        initialExpenses={expenses ?? []}
+        categories={categories ?? []}
+        vendors={vendors}
+      />
     </div>
   );
 }
