@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Mail, MessageCircle, Send, Phone, RefreshCw } from 'lucide-react';
+import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
@@ -16,16 +16,22 @@ export function DocumentActions({
   customerEmail,
   customerPhone,
   businessName,
+  businessPhone,
   documentNumber,
   docType,
+  docTotal,
+  customerName,
 }: {
   docId: string;
   pdfUrl: string | null;
   customerEmail: string | null;
   customerPhone: string | null;
   businessName: string;
+  businessPhone: string | null;
   documentNumber: number;
   docType: string;
+  docTotal: number;
+  customerName: string;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -84,6 +90,36 @@ export function DocumentActions({
     window.open(url, '_blank');
   }
 
+  function shareBitRequest() {
+    if (!businessPhone) {
+      toast({
+        variant: 'destructive',
+        title: 'חסר מספר טלפון',
+        description: 'הוסף טלפון של העסק בהגדרות כדי לשלוח בקשת ביט',
+      });
+      return;
+    }
+    const cleanPhone = businessPhone.replace(/\D/g, '');
+    const formattedAmount = new Intl.NumberFormat('he-IL', {
+      style: 'currency',
+      currency: 'ILS',
+      maximumFractionDigits: 2,
+    }).format(docTotal);
+
+    const text = `היי ${customerName} 👋
+
+לתשלום של ${formattedAmount} בביט:
+📱 ${businessPhone}
+👤 ${businessName}
+
+תודה רבה! 🙏`;
+
+    const msg = encodeURIComponent(text);
+    const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+    const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
+    window.open(url, '_blank');
+  }
+
   async function sendSms() {
     if (!smsTo) return toast({ variant: 'destructive', title: 'יש להזין מספר טלפון' });
     if (!pdfUrl) return toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
@@ -116,6 +152,10 @@ export function DocumentActions({
         <Button variant="outline" size="sm" onClick={shareWhatsApp}>
           <MessageCircle className="h-4 w-4" />
           WhatsApp
+        </Button>
+        <Button variant="outline" size="sm" onClick={shareBitRequest}>
+          <Smartphone className="h-4 w-4" />
+          בקשת ביט
         </Button>
         <Button variant="outline" size="sm" onClick={() => setSmsDialog(true)}>
           <Phone className="h-4 w-4" />

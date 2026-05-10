@@ -61,8 +61,11 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           customerEmail={customerEmail}
           customerPhone={customerPhone}
           businessName={settings?.business_name ?? 'העסק שלי'}
+          businessPhone={settings?.phone ?? null}
           documentNumber={doc.number}
           docType={doc.document_type}
+          docTotal={Number(doc.total)}
+          customerName={doc.customer_name_snapshot}
         />
       </div>
 
