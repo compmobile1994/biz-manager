@@ -10,11 +10,17 @@ const rubik = Rubik({
 });
 
 export const metadata: Metadata = {
-  title: 'ניהול עסק',
-  description: 'תוכנת ניהול לעוסק פטור — קבלות, חשבוניות, הוצאות ודוח שנתי',
+  title: 'קומפ מובייל - ניהול עסק',
+  description: 'מערכת ניהול עסק - קבלות, חשבוניות, הוצאות ודוחות',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, title: 'ניהול עסק', statusBarStyle: 'default' },
-  icons: { icon: '/icons/icon-192.png', apple: '/icons/icon-192.png' },
+  appleWebApp: { capable: true, title: 'קומפ מובייל', statusBarStyle: 'default' },
+  icons: {
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/icons/icon-apple-180.png',
+  },
 };
 
 export const viewport: Viewport = {
