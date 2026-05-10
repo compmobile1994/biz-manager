@@ -52,7 +52,7 @@ export function DocumentForm({
   const { toast } = useToast();
   const [step, setStep] = useState<'edit' | 'preview'>('edit');
 
-  const [docType, setDocType] = useState<DocumentType>('invoice_receipt');
+  const [docType, setDocType] = useState<DocumentType>('receipt');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [customerId, setCustomerId] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
@@ -173,8 +173,7 @@ export function DocumentForm({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'שגיאה ביצירת המסמך');
       toast({ title: 'המסמך נוצר', description: `${documentTypeLabel[docType]} #${json.number}` });
-      // Auto-open WhatsApp with receipt + Bit info after creation
-      router.push(`/documents/${json.id}?share=whatsapp`);
+      router.push(`/documents/${json.id}`);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'שגיאה', description: e.message });
     } finally {

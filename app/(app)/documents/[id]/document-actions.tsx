@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -34,32 +34,13 @@ export function DocumentActions({
   customerName: string;
 }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { toast } = useToast();
-  const autoSharedRef = useRef(false);
   const [emailDialog, setEmailDialog] = useState(false);
   const [emailTo, setEmailTo] = useState(customerEmail ?? '');
   const [smsTo, setSmsTo] = useState(customerPhone ?? '');
   const [smsDialog, setSmsDialog] = useState(false);
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
-
-  // Auto-share via WhatsApp when arriving via ?share=whatsapp (from new-doc flow).
-  // Fires once per page load, only if PDF is ready.
-  useEffect(() => {
-    if (autoSharedRef.current) return;
-    if (searchParams.get('share') !== 'whatsapp') return;
-    if (!pdfUrl) return; // wait until PDF is ready
-    autoSharedRef.current = true;
-    // Small delay so the page can render first
-    const t = setTimeout(() => {
-      shareWhatsApp();
-      // Clean the URL so refreshes don't re-trigger
-      router.replace(`/documents/${docId}`);
-    }, 600);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfUrl, searchParams]);
 
   async function regeneratePdf() {
     setRegenerating(true);
