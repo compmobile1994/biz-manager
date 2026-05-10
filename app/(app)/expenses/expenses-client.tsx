@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Trash2, X, Camera, FileText } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, Trash2, X, Camera, FileText, Tag, TrendingDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Expense, ExpenseCategory, PaymentMethod } from '@/lib/supabase/types';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ const PAY_METHODS: PaymentMethod[] = ['cash', 'credit_card', 'bank_transfer', 'b
 
 export function ExpensesClient({
   initialExpenses,
-  categories,
+  categories: initialCategories,
   vendors,
 }: {
   initialExpenses: Expense[];
@@ -27,11 +27,68 @@ export function ExpensesClient({
   const supabase = createClient();
   const { toast } = useToast();
   const [list, setList] = useState<Expense[]>(initialExpenses);
+  const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
   const [editing, setEditing] = useState<Partial<Expense> & { _file?: File } | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [categoriesDialog, setCategoriesDialog] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const filtered = list.filter((e) => filterCategory === 'all' || e.category_id === filterCategory);
   const totalSum = filtered.reduce((s, e) => s + Number(e.amount), 0);
+
+  // Build per-month summary (last 12 months) from full list (not filtered)
+  const monthlySummary = useMemo(() => {
+    const now = new Date();
+    const months: { key: string; label: string; total: number; count: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push({
+        key,
+        label: d.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' }),
+        total: 0,
+        count: 0,
+      });
+    }
+    for (const e of list) {
+      const m = e.expense_date.slice(0, 7);
+      const found = months.find((x) => x.key === m);
+      if (found) {
+        found.total += Number(e.amount);
+        found.count += 1;
+      }
+    }
+    return months;
+  }, [list]);
+
+  async function addCategory() {
+    const name = newCategoryName.trim();
+    if (!name) return toast({ variant: 'destructive', title: 'שם קטגוריה חובה' });
+    if (categories.some((c) => c.name === name)) {
+      return toast({ variant: 'destructive', title: 'קטגוריה כבר קיימת' });
+    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const sortOrder = (Math.max(0, ...categories.map((c) => c.sort_order || 0)) + 1);
+    const { data, error } = await supabase
+      .from('expense_categories')
+      .insert({ user_id: user.id, name, sort_order: sortOrder } as any)
+      .select()
+      .single();
+    if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
+    setCategories((cs) => [...cs, data as ExpenseCategory].sort((a, b) => a.sort_order - b.sort_order));
+    setNewCategoryName('');
+    toast({ title: 'נוסף', description: name });
+  }
+
+  async function removeCategory(id: string, name: string) {
+    if (!confirm(`למחוק את הקטגוריה "${name}"?\nההוצאות שמשתמשות בה לא יימחקו - רק יישארו בלי קטגוריה.`)) return;
+    const { error } = await supabase.from('expense_categories').delete().eq('id', id);
+    if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
+    setCategories((cs) => cs.filter((c) => c.id !== id));
+    setList((es) => es.map((e) => (e.category_id === id ? { ...e, category_id: null } : e)));
+    toast({ title: 'נמחק' });
+  }
 
   function startNew() {
     setEditing({
@@ -91,14 +148,47 @@ export function ExpensesClient({
 
   return (
     <div className="space-y-4">
+      {/* Monthly summary card */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <TrendingDown className="h-5 w-5 text-destructive" />
+              סיכום חודשי
+            </h3>
+            <span className="text-xs text-muted-foreground">12 חודשים אחרונים</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {monthlySummary.slice(0, 8).map((m) => (
+              <div
+                key={m.key}
+                className={`rounded-md border p-2 text-sm ${m.total > 0 ? 'bg-muted/30' : 'bg-background'}`}
+              >
+                <p className="text-xs text-muted-foreground">{m.label}</p>
+                <p className={`font-semibold ${m.total > 0 ? '' : 'text-muted-foreground'}`}>
+                  {formatCurrency(m.total)}
+                </p>
+                {m.count > 0 && <p className="text-[10px] text-muted-foreground">{m.count} הוצאות</p>}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap gap-2 items-center justify-between">
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">כל הקטגוריות</SelectItem>
-            {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל הקטגוריות</SelectItem>
+              {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => setCategoriesDialog(true)}>
+            <Tag className="h-4 w-4" />
+            ערוך קטגוריות
+          </Button>
+        </div>
         <Button onClick={startNew}>
           <Plus className="h-4 w-4" />
           הוצאה חדשה
@@ -107,7 +197,7 @@ export function ExpensesClient({
 
       <Card>
         <CardContent className="py-3 text-right">
-          <span className="text-muted-foreground text-sm">סה״כ:</span>
+          <span className="text-muted-foreground text-sm">סה״כ {filterCategory === 'all' ? '' : 'בקטגוריה'}:</span>
           <span className="font-bold text-lg mr-2">{formatCurrency(totalSum)}</span>
         </CardContent>
       </Card>
@@ -146,6 +236,60 @@ export function ExpensesClient({
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* Categories management dialog */}
+      {categoriesDialog && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setCategoriesDialog(false)}>
+          <Card className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="py-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-lg">ניהול קטגוריות</h3>
+                <Button variant="ghost" size="icon" onClick={() => setCategoriesDialog(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                הוסף קטגוריות לפי התחום של העסק שלך — לדוגמה: סלולר, מחשבים, מדפסות, תקשורת.
+              </p>
+
+              {/* Add new category */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="שם קטגוריה חדשה"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+                />
+                <Button onClick={addCategory}>
+                  <Plus className="h-4 w-4" />
+                  הוסף
+                </Button>
+              </div>
+
+              {/* Existing categories list */}
+              <div className="border rounded-md divide-y max-h-72 overflow-auto">
+                {categories.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">אין קטגוריות</p>
+                ) : (
+                  categories.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between px-3 py-2">
+                      <span className="text-sm">{c.name}</span>
+                      <Button variant="ghost" size="icon" onClick={() => removeCategory(c.id, c.name)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                💡 הצעות לעסק שלך: סלולר · מחשבים · מדפסות · תקשורת · אביזרים · שכירות · חשבונות · שיווק
+              </p>
+            </CardContent>
+          </Card>
         </div>
       )}
 
