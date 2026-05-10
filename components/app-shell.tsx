@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ const NAV = [
   { href: '/customers', label: 'לקוחות', icon: Users },
   { href: '/saved-items', label: 'פריטים שמורים', icon: Package },
   { href: '/expenses', label: 'הוצאות', icon: Receipt },
+  { href: '/payment-request', label: 'שלח פרטי תשלום', icon: Send },
   { href: '/reports', label: 'דוחות / רואה חשבון', icon: BarChart3 },
   { href: '/settings', label: 'הגדרות', icon: Settings },
 ];
