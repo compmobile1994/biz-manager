@@ -81,11 +81,27 @@ export default async function NewDocumentPage({
     signatureUrl = signed?.signedUrl ?? null;
   }
 
-  const [{ data: customers }, { data: items }, { data: counters }] = await Promise.all([
+  const [{ data: customers }, { data: items }, { data: counters }, pastItemsRes] = await Promise.all([
     supabase.from('customers').select('id, name, email, phone, address, tax_id').order('name'),
     supabase.from('saved_items').select('id, name, description, default_price').eq('is_active', true).order('name'),
     supabase.from('document_counters').select('document_type, last_number').eq('user_id', user.id),
+    // For phone-per-line autocomplete: fetch all past phones grouped by customer
+    supabase
+      .from('document_items')
+      .select('phone_number, documents!inner(customer_id)')
+      .not('phone_number', 'is', null)
+      .limit(2000),
   ]);
+
+  // Build customer_id → unique phone numbers map for autocomplete
+  const customerPhones: Record<string, string[]> = {};
+  for (const row of (pastItemsRes.data as any[] | null) ?? []) {
+    const phone = row.phone_number?.trim();
+    const cid = row.documents?.customer_id;
+    if (!phone || !cid) continue;
+    if (!customerPhones[cid]) customerPhones[cid] = [];
+    if (!customerPhones[cid].includes(phone)) customerPhones[cid].push(phone);
+  }
 
   // Build a map of expected next numbers per document type
   const nextNumbers: Record<string, number> = {
@@ -113,6 +129,7 @@ export default async function NewDocumentPage({
         savedItems={items ?? []}
         nextNumbers={nextNumbers}
         prefill={prefill}
+        customerPhones={customerPhones}
         settings={{
           business_name: settings.business_name,
           owner_name: (settings as any).owner_name ?? null,

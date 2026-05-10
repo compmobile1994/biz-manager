@@ -62,6 +62,7 @@ export function DocumentForm({
   signatureUrl,
   nextNumbers,
   prefill,
+  customerPhones,
 }: {
   customers: CustomerLite[];
   savedItems: SavedItemLite[];
@@ -70,6 +71,7 @@ export function DocumentForm({
   signatureUrl: string | null;
   nextNumbers: Record<string, number>;
   prefill?: PrefillData | null;
+  customerPhones: Record<string, string[]>;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -348,6 +350,7 @@ export function DocumentForm({
               onPickSaved={(id) => pickSavedItem(idx, id)}
               onRemove={() => removeLine(idx)}
               canRemove={lines.length > 1}
+              phoneSuggestions={customerId ? customerPhones[customerId] ?? [] : []}
             />
           ))}
           <div className="border-t pt-3 flex justify-between items-center">
@@ -440,6 +443,7 @@ function LineRow({
   onPickSaved,
   onRemove,
   canRemove,
+  phoneSuggestions,
 }: {
   idx: number;
   line: Line;
@@ -448,7 +452,9 @@ function LineRow({
   onPickSaved: (id: string) => void;
   onRemove: () => void;
   canRemove: boolean;
+  phoneSuggestions: string[];
 }) {
+  const phonesListId = `phones-list-${idx}`;
   const lineTotal = Number(line.quantity || 0) * Number(line.unit_price || 0);
   return (
     <div className="rounded-md border p-3 space-y-3 bg-muted/30">
@@ -504,13 +510,27 @@ function LineRow({
           />
         </div>
         <div className="md:col-span-5 space-y-1">
-          <Label className="text-xs">מספר טלפון (אופציונלי - לטעינות טוקמן)</Label>
+          <Label className="text-xs">
+            מספר טלפון (אופציונלי - לטעינות טוקמן)
+            {phoneSuggestions.length > 0 && (
+              <span className="text-blue-600 mr-2">💡 {phoneSuggestions.length} טלפונים שמורים ללקוח</span>
+            )}
+          </Label>
           <Input
             type="tel"
             placeholder="לדוגמה: 052-1234567"
             value={line.phone_number}
             onChange={(e) => onChange({ phone_number: e.target.value })}
+            list={phonesListId}
+            autoComplete="off"
           />
+          {phoneSuggestions.length > 0 && (
+            <datalist id={phonesListId}>
+              {phoneSuggestions.map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
+          )}
         </div>
         <div className="md:col-span-12 flex items-end justify-end">
           <span className="text-sm font-semibold">סה״כ שורה: {formatCurrency(lineTotal)}</span>
