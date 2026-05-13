@@ -17,12 +17,22 @@ async function getStats() {
   const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
-  const [{ data: ytdDocs }, { data: ytdExpenses }, { data: lastDocs }, { data: settings }] = await Promise.all([
+  const [
+    { data: ytdDocs },
+    { data: ytdExpenses },
+    { data: lastDocs },
+    { data: settings },
+    { data: allCustomers, count: customerCountRaw },
+  ] = await Promise.all([
     supabase.from('documents').select('total, issue_date, document_type, status, customer_id').eq('user_id', user.id).gte('issue_date', startOfYear).neq('status', 'cancelled'),
     supabase.from('expenses').select('amount, expense_date').eq('user_id', user.id).gte('expense_date', startOfYear),
     supabase.from('documents').select('id, document_type, number, customer_name_snapshot, total, issue_date, status').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
     supabase.from('business_settings').select('business_name').eq('user_id', user.id).maybeSingle(),
+    supabase.from('customers').select('customer_type', { count: 'exact' }).eq('user_id', user.id),
   ]);
+
+  const customerCount = customerCountRaw ?? (allCustomers?.length ?? 0);
+  const regularCount = (allCustomers ?? []).filter((c: any) => c.customer_type === 'regular').length;
 
   const ytdRevenue = (ytdDocs ?? []).reduce((s, d) => s + Number(d.total || 0), 0);
   const monthRevenue = (ytdDocs ?? []).filter((d) => d.issue_date >= startOfMonth).reduce((s, d) => s + Number(d.total || 0), 0);
@@ -71,6 +81,8 @@ async function getStats() {
     lastDocs: lastDocs ?? [],
     months,
     topCustomers,
+    customerCount,
+    regularCount,
     hasSettings: !!settings,
     businessName: settings?.business_name,
   };
@@ -112,6 +124,28 @@ export default async function DashboardPage() {
         <StatCard label="הוצאות השנה" value={stats.ytdExpenses} icon={<Wallet className="h-5 w-5" />} />
         <StatCard label="רווח השנה" value={stats.netYtd} icon={<TrendingUp className="h-5 w-5" />} highlight />
       </div>
+
+      <Link href="/customers" className="block">
+        <Card className="hover:shadow-md transition-shadow cursor-pointer">
+          <CardContent className="py-4 grid grid-cols-3 gap-4 text-center">
+            <div className="flex items-center justify-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-2xl font-bold">{stats.customerCount}</p>
+                <p className="text-xs text-muted-foreground">סה״כ לקוחות</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-primary">{stats.regularCount}</p>
+              <p className="text-xs text-muted-foreground">לקוחות קבועים</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-muted-foreground">{stats.customerCount - stats.regularCount}</p>
+              <p className="text-xs text-muted-foreground">מזדמנים</p>
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       <Card>
         <CardHeader>

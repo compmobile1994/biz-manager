@@ -78,14 +78,37 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
     setList((l) => l.filter((c) => c.id !== id));
   }
 
-  const tabs: { key: TypeFilter; label: string }[] = [
-    { key: 'all', label: 'הכל' },
-    { key: 'regular', label: 'קבועים' },
-    { key: 'occasional', label: 'מזדמנים' },
+  // Counts per type
+  const totalCount = list.length;
+  const regularCount = list.filter((c) => ((c as any).customer_type ?? 'occasional') === 'regular').length;
+  const occasionalCount = totalCount - regularCount;
+
+  const tabs: { key: TypeFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'הכל', count: totalCount },
+    { key: 'regular', label: 'קבועים', count: regularCount },
+    { key: 'occasional', label: 'מזדמנים', count: occasionalCount },
   ];
 
   return (
     <div className="space-y-4">
+      {/* Stats card */}
+      <Card>
+        <CardContent className="py-4 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-3xl font-bold">{totalCount}</p>
+            <p className="text-xs text-muted-foreground">סה״כ לקוחות</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-primary">{regularCount}</p>
+            <p className="text-xs text-muted-foreground">לקוחות קבועים</p>
+          </div>
+          <div>
+            <p className="text-3xl font-bold text-muted-foreground">{occasionalCount}</p>
+            <p className="text-xs text-muted-foreground">מזדמנים</p>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex gap-2 flex-wrap">
         <Input placeholder="חיפוש…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
         <Button onClick={startNew}>
@@ -102,7 +125,7 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
             size="sm"
             onClick={() => setTypeFilter(t.key)}
           >
-            {t.label}
+            {t.label} <span className="opacity-70 mr-1">({t.count})</span>
           </Button>
         ))}
       </div>
