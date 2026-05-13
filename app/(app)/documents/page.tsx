@@ -6,6 +6,7 @@ import { Plus, FileEdit } from 'lucide-react';
 import { DocumentsList } from './documents-list';
 import type { DocumentRow } from '@/lib/supabase/types';
 import { DraftsSection } from './drafts-section';
+import { RegenerateAllButton } from './regenerate-all-button';
 
 export default async function DocumentsPage() {
   const supabase = await createClient();
@@ -28,12 +29,15 @@ export default async function DocumentsPage() {
           <h1 className="text-3xl font-bold">מסמכים</h1>
           <p className="text-muted-foreground">קבלות, חשבוניות עסקה וזיכויים</p>
         </div>
-        <Link href="/documents/new">
-          <Button size="lg">
-            <Plus className="h-4 w-4" />
-            מסמך חדש
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <RegenerateAllButton />
+          <Link href="/documents/new">
+            <Button size="lg">
+              <Plus className="h-4 w-4" />
+              מסמך חדש
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <DraftsSection initialDrafts={(drafts as any[] | null) ?? []} />
