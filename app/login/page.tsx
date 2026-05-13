@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+
+const REMEMBERED_EMAIL_KEY = 'bm:last_email';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,6 +21,37 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'sign_in' | 'sign_up'>('sign_in');
   const [loading, setLoading] = useState(false);
+
+  // Auto-login flow on page load:
+  //   1) Pre-fill email from localStorage (last successful login)
+  //   2) Try Credential Management API — if browser has a saved password,
+  //      sign in silently and redirect. User won't even see this screen.
+  useEffect(() => {
+    const remembered = typeof window !== 'undefined' ? localStorage.getItem(REMEMBERED_EMAIL_KEY) : null;
+    if (remembered) setEmail(remembered);
+
+    // Try silent auto-login via stored credentials (if browser supports + has saved password)
+    (async () => {
+      try {
+        const nav: any = navigator;
+        if (!nav?.credentials?.get) return;
+        const cred: any = await nav.credentials.get({ password: true, mediation: 'silent' });
+        if (cred?.id && cred?.password) {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: cred.id,
+            password: cred.password,
+          });
+          if (!error) {
+            localStorage.setItem(REMEMBERED_EMAIL_KEY, cred.id);
+            router.push('/');
+            router.refresh();
+          }
+        }
+      } catch {
+        // Silent failure — fall back to manual login
+      }
+    })();
+  }, [router, supabase]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +70,21 @@ export default function LoginPage() {
       if (mode === 'sign_up') {
         toast({ title: 'נשלח מייל אימות', description: 'אנא בדוק את תיבת הדואר שלך לאישור החשבון.' });
       } else {
+        // Persist email + offer credential storage so future visits auto-login
+        try {
+          localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+          const nav: any = navigator;
+          if (nav?.credentials?.store && typeof (window as any).PasswordCredential === 'function') {
+            const cred = new (window as any).PasswordCredential({
+              id: email,
+              password,
+              name: email,
+            });
+            await nav.credentials.store(cred);
+          }
+        } catch {
+          // Browser doesn't support Credential Management — that's fine
+        }
         router.push('/');
         router.refresh();
       }
@@ -73,16 +121,38 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
               <Label htmlFor="email">דוא״ל</Label>
-              <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoComplete={mode === 'sign_in' ? 'username' : 'email'}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
             <div>
               <Label htmlFor="password">סיסמה</Label>
-              <Input id="password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={6}
+                autoComplete={mode === 'sign_in' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'אנא המתן…' : mode === 'sign_in' ? 'כניסה' : 'הרשמה'}
             </Button>
           </form>
+          {mode === 'sign_in' && (
+            <p className="text-xs text-muted-foreground text-center">
+              💡 אחרי שתתחבר פעם אחת — הדפדפן ישמור את הסיסמה והאתר ינסה להיכנס אוטומטית בפעם הבאה
+            </p>
+          )}
           <button
             type="button"
             className="text-sm text-muted-foreground hover:text-foreground w-full text-center"
