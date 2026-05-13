@@ -50,6 +50,14 @@ export async function POST(request: Request) {
     .single();
   if (docErr) return NextResponse.json({ error: docErr.message }, { status: 500 });
 
+  // Helper: roll back the orphaned `documents` row on any later failure so we
+  // don't leave half-written receipts that look "issued" but have no items
+  // or payment behind them. Without this, the running-number sequence
+  // burns a number on every failed attempt and the doc appears empty.
+  async function rollback() {
+    await supabase.from('documents').delete().eq('id', doc.id);
+  }
+
   // 3) שורות
   const { error: linesErr } = await supabase.from('document_items').insert(
     data.lines.map((l) => ({
@@ -67,7 +75,10 @@ export async function POST(request: Request) {
       importer_type: l.importer_type ?? null,
     })),
   );
-  if (linesErr) return NextResponse.json({ error: linesErr.message }, { status: 500 });
+  if (linesErr) {
+    await rollback();
+    return NextResponse.json({ error: linesErr.message }, { status: 500 });
+  }
 
   // 4) תשלום (אם רלוונטי)
   if (data.payment) {
@@ -85,7 +96,10 @@ export async function POST(request: Request) {
       check_due_date: data.payment.check_due_date ?? null,
       transfer_ref: data.payment.transfer_ref ?? null,
     });
-    if (payErr) return NextResponse.json({ error: payErr.message }, { status: 500 });
+    if (payErr) {
+      await rollback();
+      return NextResponse.json({ error: payErr.message }, { status: 500 });
+    }
   }
 
   // 5) יצירת PDF + העלאה ל-storage
