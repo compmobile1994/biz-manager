@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2, X, Save } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,7 @@ export function DocumentForm({
   prefill,
   customerPhones,
   recentItems,
+  draftId,
 }: {
   customers: CustomerLite[];
   savedItems: SavedItemLite[];
@@ -76,6 +77,7 @@ export function DocumentForm({
   prefill?: PrefillData | null;
   customerPhones: Record<string, string[]>;
   recentItems: { description: string; unit_price: number }[];
+  draftId?: string | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -112,6 +114,52 @@ export function DocumentForm({
   const [checkBank, setCheckBank] = useState(prefill?.payment?.check_bank ?? '');
   const [transferRef, setTransferRef] = useState(prefill?.payment?.transfer_ref ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId ?? null);
+
+  async function saveDraft() {
+    if (!customerName.trim() && lines.every((l) => !l.description.trim())) {
+      toast({ variant: 'destructive', title: 'אין מה לשמור', description: 'מלא לפחות שם לקוח או פריט אחד' });
+      return;
+    }
+    setSavingDraft(true);
+    try {
+      const draftData = {
+        document_type: docType,
+        issue_date: issueDate,
+        customer_id: customerId || null,
+        customer_name: customerName,
+        customer_tax_id: customerTaxId,
+        customer_address: customerAddress,
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
+        notes,
+        lines,
+        payment: {
+          method: paymentMethod,
+          card_last4: cardLast4,
+          card_holder: cardHolder,
+          auth_code: authCode,
+          check_number: checkNumber,
+          check_bank: checkBank,
+          transfer_ref: transferRef,
+        },
+      };
+      const res = await fetch('/api/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentDraftId, data: draftData }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'שמירה נכשלה');
+      setCurrentDraftId(json.id);
+      toast({ title: 'נשמר כטיוטה', description: 'תוכל לפתוח אותה שוב מ"מסמכים"' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'שגיאה', description: e.message });
+    } finally {
+      setSavingDraft(false);
+    }
+  }
 
   const total = useMemo(() => lines.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0), 0), [lines]);
   const docNeedsPayment = docType === 'receipt' || docType === 'invoice_receipt';
@@ -209,6 +257,10 @@ export function DocumentForm({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'שגיאה ביצירת המסמך');
       toast({ title: 'המסמך נוצר', description: `${documentTypeLabel[docType]} #${json.number}` });
+      // Delete the draft (if any) now that the real document was issued
+      if (currentDraftId) {
+        fetch(`/api/drafts/${currentDraftId}`, { method: 'DELETE' }).catch(() => {});
+      }
       router.push(`/documents/${json.id}`);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'שגיאה', description: e.message });
@@ -452,11 +504,17 @@ export function DocumentForm({
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-between gap-2 flex-wrap">
         <Button variant="ghost" onClick={() => router.back()}>ביטול</Button>
-        <Button onClick={goToPreview} size="lg">
-          תצוגה מקדימה ←
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={saveDraft} disabled={savingDraft} size="lg">
+            <Save className="h-4 w-4" />
+            {savingDraft ? 'שומר…' : currentDraftId ? 'עדכן טיוטה' : 'שמור כטיוטה'}
+          </Button>
+          <Button onClick={goToPreview} size="lg">
+            תצוגה מקדימה ←
+          </Button>
+        </div>
       </div>
     </div>
   );

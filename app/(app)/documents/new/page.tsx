@@ -5,7 +5,7 @@ import { DocumentForm } from './document-form';
 export default async function NewDocumentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ duplicate?: string }>;
+  searchParams: Promise<{ duplicate?: string; draft?: string }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
@@ -16,7 +16,31 @@ export default async function NewDocumentPage({
 
   // If user clicked "duplicate" on a past receipt, fetch its data to pre-fill
   let prefill: any = null;
-  if (params.duplicate) {
+  let draftId: string | null = null;
+
+  if (params.draft) {
+    // Loading a saved draft
+    const { data: draft } = await supabase
+      .from('document_drafts')
+      .select('id, data')
+      .eq('id', params.draft)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (draft) {
+      draftId = draft.id;
+      const d: any = draft.data;
+      prefill = {
+        document_type: d.document_type,
+        customer_id: d.customer_id,
+        customer_name: d.customer_name ?? '',
+        customer_tax_id: d.customer_tax_id ?? '',
+        customer_address: d.customer_address ?? '',
+        notes: d.notes ?? '',
+        lines: d.lines ?? [],
+        payment: d.payment ?? null,
+      };
+    }
+  } else if (params.duplicate) {
     const [{ data: srcDoc }, { data: srcItems }, { data: srcPayment }] = await Promise.all([
       supabase.from('documents').select('*').eq('id', params.duplicate).maybeSingle(),
       supabase.from('document_items').select('*').eq('document_id', params.duplicate).order('sort_order'),
@@ -150,6 +174,7 @@ export default async function NewDocumentPage({
         prefill={prefill}
         customerPhones={customerPhones}
         recentItems={recentItems}
+        draftId={draftId}
         settings={{
           business_name: settings.business_name,
           owner_name: (settings as any).owner_name ?? null,

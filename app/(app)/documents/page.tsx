@@ -1,17 +1,25 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Plus, FileEdit } from 'lucide-react';
 import { DocumentsList } from './documents-list';
 import type { DocumentRow } from '@/lib/supabase/types';
+import { DraftsSection } from './drafts-section';
 
 export default async function DocumentsPage() {
   const supabase = await createClient();
-  const { data: docs } = await supabase
-    .from('documents')
-    .select('*')
-    .order('issue_date', { ascending: false })
-    .order('number', { ascending: false });
+  const [{ data: docs }, { data: drafts }] = await Promise.all([
+    supabase
+      .from('documents')
+      .select('*')
+      .order('issue_date', { ascending: false })
+      .order('number', { ascending: false }),
+    supabase
+      .from('document_drafts')
+      .select('id, label, updated_at')
+      .order('updated_at', { ascending: false }),
+  ]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -27,6 +35,8 @@ export default async function DocumentsPage() {
           </Button>
         </Link>
       </div>
+
+      <DraftsSection initialDrafts={(drafts as any[] | null) ?? []} />
 
       <DocumentsList initial={(docs as DocumentRow[] | null) ?? []} />
     </div>
