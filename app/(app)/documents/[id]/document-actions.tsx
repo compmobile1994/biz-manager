@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone, Landmark, Copy } from 'lucide-react';
+import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone, Landmark, Copy, XCircle } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ export function DocumentActions({
   docType,
   docTotal,
   customerName,
+  status,
 }: {
   docId: string;
   pdfUrl: string | null;
@@ -40,6 +42,7 @@ export function DocumentActions({
   docType: string;
   docTotal: number;
   customerName: string;
+  status: string;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -49,6 +52,26 @@ export function DocumentActions({
   const [smsDialog, setSmsDialog] = useState(false);
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+
+  async function cancelDoc() {
+    if (
+      !confirm(
+        `לבטל את ${docTitle}?\n\n` +
+          `הקבלה תישאר במערכת אבל תסומן כ"בוטל" - לא ניתן למחוק קבלות לפי חוק.\n` +
+          `המספור הרץ נשמר (הקבלה הבאה תהיה #${documentNumber + 1} כרגיל).\n\n` +
+          `להמשיך?`,
+      )
+    ) return;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from('documents').update({ status: 'cancelled' }).eq('id', docId);
+      if (error) throw error;
+      toast({ title: 'הקבלה בוטלה' });
+      router.refresh();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'שגיאה', description: e.message });
+    }
+  }
 
   async function regeneratePdf() {
     setRegenerating(true);
@@ -239,6 +262,17 @@ export function DocumentActions({
           <Copy className="h-4 w-4" />
           שכפל קבלה
         </Button>
+        {status !== 'cancelled' && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={cancelDoc}
+            title="סמן את הקבלה כבוטלת (לא נמחקת - מסומנת בלבד)"
+          >
+            <XCircle className="h-4 w-4" />
+            בטל קבלה
+          </Button>
+        )}
       </div>
 
       {emailDialog && (

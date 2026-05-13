@@ -70,6 +70,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           docType={doc.document_type}
           docTotal={Number(doc.total)}
           customerName={doc.customer_name_snapshot}
+          status={doc.status}
         />
       </div>
 
