@@ -27,13 +27,25 @@ interface Line {
   phone_number: string;
   imei: string;
   warranty_months: string; // kept as string for input handling, parsed to int on submit
+  warranty_provider: string;          // מי נותן את האחריות (טקסט חופשי)
+  importer_type: '' | 'official' | 'parallel'; // יבואן רשמי / מקביל
 }
 
 const DOC_TYPES: DocumentType[] = ['receipt', 'invoice', 'invoice_receipt'];
 const PAY_METHODS: PaymentMethod[] = ['cash', 'credit_card', 'bank_transfer', 'bit', 'check', 'other'];
 
 function emptyLine(): Line {
-  return { saved_item_id: null, description: '', quantity: 1, unit_price: 0, phone_number: '', imei: '', warranty_months: '' };
+  return {
+    saved_item_id: null,
+    description: '',
+    quantity: 1,
+    unit_price: 0,
+    phone_number: '',
+    imei: '',
+    warranty_months: '',
+    warranty_provider: '',
+    importer_type: '',
+  };
 }
 
 interface PrefillData {
@@ -43,7 +55,7 @@ interface PrefillData {
   customer_tax_id: string;
   customer_address: string;
   notes: string;
-  lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number; phone_number?: string; imei?: string; warranty_months?: number | null }[];
+  lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number; phone_number?: string; imei?: string; warranty_months?: number | null; warranty_provider?: string | null; importer_type?: 'official' | 'parallel' | null }[];
   payment: {
     method: PaymentMethod;
     card_last4: string;
@@ -103,6 +115,8 @@ export function DocumentForm({
           phone_number: l.phone_number ?? '',
           imei: l.imei ?? '',
           warranty_months: l.warranty_months ? String(l.warranty_months) : '',
+          warranty_provider: l.warranty_provider ?? '',
+          importer_type: (l.importer_type ?? '') as Line['importer_type'],
         }))
       : [emptyLine()],
   );
@@ -239,6 +253,8 @@ export function DocumentForm({
             phone_number: l.phone_number?.trim() || null,
             imei: l.imei?.trim() || null,
             warranty_months: l.warranty_months && Number(l.warranty_months) > 0 ? Number(l.warranty_months) : null,
+            warranty_provider: l.warranty_provider?.trim() || null,
+            importer_type: l.importer_type || null,
           })),
           payment: docNeedsPayment
             ? {
@@ -291,6 +307,8 @@ export function DocumentForm({
               phone_number: l.phone_number,
               imei: l.imei,
               warranty_months: l.warranty_months ? Number(l.warranty_months) : null,
+              warranty_provider: l.warranty_provider,
+              importer_type: l.importer_type || null,
             })),
             payment_method: paymentMethod,
             card_last4: cardLast4,
@@ -670,6 +688,36 @@ function LineRow({
         <div className="md:col-span-3 flex items-end justify-end">
           <span className="text-sm font-semibold">סה״כ שורה: {formatCurrency(lineTotal)}</span>
         </div>
+
+        {/* Device-only fields: ספק האחריות + סוג היבוא */}
+        {(line.imei || line.warranty_months) && (
+          <>
+            <div className="md:col-span-6 space-y-1">
+              <Label className="text-xs">ספק האחריות (מי אחראי לאחריות)</Label>
+              <Input
+                placeholder='לדוגמה: יבואן רשמי / החנות / "סלקום"'
+                value={line.warranty_provider}
+                onChange={(e) => onChange({ warranty_provider: e.target.value })}
+              />
+            </div>
+            <div className="md:col-span-6 space-y-1">
+              <Label className="text-xs">סוג היבוא</Label>
+              <Select
+                value={line.importer_type || '__none__'}
+                onValueChange={(v) =>
+                  onChange({ importer_type: v === '__none__' ? '' : (v as 'official' | 'parallel') })
+                }
+              >
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— לא רלוונטי —</SelectItem>
+                  <SelectItem value="official">יבואן רשמי</SelectItem>
+                  <SelectItem value="parallel">יבואן מקביל</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

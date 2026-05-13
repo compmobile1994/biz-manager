@@ -41,7 +41,8 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 relative">
+      <div className="absolute -top-1 right-1 text-sm font-bold text-slate-600 tracking-wider">בס&quot;ד</div>
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Link href="/documents">
@@ -103,7 +104,13 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                 if (it.warranty_months) {
                   const d = new Date(doc.issue_date + 'T00:00:00');
                   d.setMonth(d.getMonth() + it.warranty_months);
-                  extras.push(`🛡️ אחריות ${it.warranty_months} ח׳ (עד ${formatDate(d)})`);
+                  const provider = it.warranty_provider ? ` (${it.warranty_provider})` : '';
+                  extras.push(`🛡️ אחריות ${it.warranty_months} ח׳${provider} - עד ${formatDate(d)}`);
+                } else if (it.warranty_provider) {
+                  extras.push(`🛡️ אחריות: ${it.warranty_provider}`);
+                }
+                if (it.importer_type) {
+                  extras.push(`📦 ${it.importer_type === 'official' ? 'יבואן רשמי' : 'יבואן מקביל'}`);
                 }
                 return (
                   <tr key={it.id} className="border-t">

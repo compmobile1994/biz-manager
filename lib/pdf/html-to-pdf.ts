@@ -75,7 +75,17 @@ function readLocalFontAsDataUrl(filename: string): string | null {
 
 interface GenerateArgs {
   doc: any;
-  lines: { description: string; quantity: number; unit_price: number; line_total: number }[];
+  lines: {
+    description: string;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+    phone_number?: string | null;
+    imei?: string | null;
+    warranty_months?: number | null;
+    warranty_provider?: string | null;
+    importer_type?: 'official' | 'parallel' | null;
+  }[];
   payment: { method: string; amount: number; card_last4?: string | null; auth_code?: string | null; check_number?: string | null; transfer_ref?: string | null } | null;
   settings: any;
 }

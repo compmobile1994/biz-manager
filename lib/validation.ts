@@ -10,6 +10,8 @@ export const lineSchema = z.object({
   phone_number: z.string().nullable().optional(),
   imei: z.string().nullable().optional(),
   warranty_months: z.number().int().nullable().optional(),
+  warranty_provider: z.string().nullable().optional(),
+  importer_type: z.enum(['official', 'parallel']).nullable().optional(),
 });
 
 export const paymentSchema = z.object({

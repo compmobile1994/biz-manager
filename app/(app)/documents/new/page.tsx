@@ -63,6 +63,8 @@ export default async function NewDocumentPage({
           // For duplicated device sales: clear IMEI (each device has a unique IMEI)
           imei: '',
           warranty_months: it.warranty_months ?? null,
+          warranty_provider: it.warranty_provider ?? '',
+          importer_type: it.importer_type ?? null,
         })),
         payment: srcPayment
           ? {

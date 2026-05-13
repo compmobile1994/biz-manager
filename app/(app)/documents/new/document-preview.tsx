@@ -23,6 +23,8 @@ export interface PreviewLine {
   phone_number?: string;
   imei?: string;
   warranty_months?: number | null;
+  warranty_provider?: string | null;
+  importer_type?: 'official' | 'parallel' | null;
 }
 
 export interface PreviewData {
@@ -77,7 +79,13 @@ export function DocumentPreview({
     if (l.warranty_months && l.warranty_months > 0) {
       const d = new Date(data.issue_date + 'T00:00:00');
       d.setMonth(d.getMonth() + l.warranty_months);
-      extras.push(`🛡️ אחריות ${l.warranty_months} ח׳ (עד ${formatDate(d)})`);
+      const provider = l.warranty_provider ? ` (${l.warranty_provider})` : '';
+      extras.push(`🛡️ אחריות ${l.warranty_months} ח׳${provider} - עד ${formatDate(d)}`);
+    } else if (l.warranty_provider) {
+      extras.push(`🛡️ אחריות: ${l.warranty_provider}`);
+    }
+    if (l.importer_type) {
+      extras.push(`📦 ${l.importer_type === 'official' ? 'יבואן רשמי' : 'יבואן מקביל'}`);
     }
     return extras;
   }
@@ -96,12 +104,13 @@ export function DocumentPreview({
 
   return (
     <div
-      className="bg-white text-slate-900 rounded-lg shadow-md border overflow-hidden"
+      className="bg-white text-slate-900 rounded-lg shadow-md border overflow-hidden relative"
       dir="rtl"
       style={{ fontFamily: 'var(--font-rubik), system-ui, sans-serif' }}
     >
+      <div className="absolute top-2 right-3 text-sm font-bold text-slate-700 tracking-wider">בס&quot;ד</div>
       {/* Header: business info on right, logo on left */}
-      <div className="px-8 pt-8 pb-4 flex items-start justify-between gap-6">
+      <div className="px-8 pt-10 pb-4 flex items-start justify-between gap-6">
         {/* Right: business identity */}
         <div className="text-right space-y-1.5">
           <h2 className="text-2xl font-bold mb-2">{settings.business_name}</h2>

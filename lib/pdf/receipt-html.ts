@@ -13,6 +13,8 @@ interface BuildArgs {
     phone_number?: string | null;
     imei?: string | null;
     warranty_months?: number | null;
+    warranty_provider?: string | null;
+    importer_type?: 'official' | 'parallel' | null;
   }[];
   payment: { method: string; amount: number; card_last4?: string | null; auth_code?: string | null; check_number?: string | null; transfer_ref?: string | null } | null;
   settings: any;
@@ -52,14 +54,21 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
   }
 
   // For each line, suffix description with phone/IMEI/warranty if present.
+  const importerLabel = (t: 'official' | 'parallel' | null | undefined): string =>
+    t === 'official' ? 'יבואן רשמי' : t === 'parallel' ? 'יבואן מקביל' : '';
   const renderDesc = (l: BuildArgs['lines'][number]): string => {
     const desc = escapeHtml(l.description);
     const extras: string[] = [];
     if (l.phone_number) extras.push(`📱 ${escapeHtml(l.phone_number)}`);
     if (l.imei) extras.push(`IMEI: ${escapeHtml(l.imei)}`);
     if (l.warranty_months && l.warranty_months > 0) {
-      extras.push(`🛡️ אחריות ${l.warranty_months} חודשים (עד ${warrantyExpiry(l.warranty_months)})`);
+      const provider = l.warranty_provider ? ` (${escapeHtml(l.warranty_provider)})` : '';
+      extras.push(`🛡️ אחריות ${l.warranty_months} חודשים${provider} - עד ${warrantyExpiry(l.warranty_months)}`);
+    } else if (l.warranty_provider) {
+      // ספק אחריות צוין בלי משך
+      extras.push(`🛡️ אחריות: ${escapeHtml(l.warranty_provider)}`);
     }
+    if (l.importer_type) extras.push(`📦 ${importerLabel(l.importer_type)}`);
     if (extras.length === 0) return desc;
     return `${desc}<br/><span style="color:#64748b; font-size:9pt;">${extras.join(' · ')}</span>`;
   };
@@ -147,8 +156,18 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
     font-size: 11pt;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    position: relative;
   }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .bsd {
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    font-size: 11pt;
+    font-weight: 700;
+    color: #334155;
+    letter-spacing: 0.5px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-top: 14px; }
   .business-info h1 { margin: 0 0 8px; font-size: 22pt; font-weight: 700; }
   .business-info p { margin: 2px 0; font-size: 10pt; }
   .business-info .label { color: #64748b; }
@@ -176,6 +195,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
 </style>
 </head>
 <body>
+  <div class="bsd">בס&quot;ד</div>
   <div class="header">
     <div class="business-info">
       <h1>${escapeHtml(settings?.business_name ?? 'העסק שלי')}</h1>
