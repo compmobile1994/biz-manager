@@ -22,6 +22,14 @@ export const paymentSchema = z.object({
   auth_code: z.string().nullable().optional(),
   check_number: z.string().nullable().optional(),
   check_bank: z.string().nullable().optional(),
+  check_branch: z.string().nullable().optional(),
+  check_account: z.string().nullable().optional(),
+  check_due_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional()
+    .or(z.literal('').transform(() => null)),
   transfer_ref: z.string().nullable().optional(),
 });
 

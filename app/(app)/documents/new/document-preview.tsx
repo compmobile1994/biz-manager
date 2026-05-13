@@ -39,6 +39,10 @@ export interface PreviewData {
   card_last4: string;
   auth_code: string;
   check_number: string;
+  check_bank?: string;
+  check_branch?: string;
+  check_account?: string;
+  check_due_date?: string;
   transfer_ref: string;
   needsPayment: boolean;
   expectedNumber: number;
@@ -219,6 +223,20 @@ export function DocumentPreview({
               <span>{formatCurrency(total)}</span>
             </div>
           </div>
+
+          {data.payment_method === 'check' && (
+            <div className="mt-3 rounded-md border bg-slate-50 p-3 text-sm">
+              <p className="font-semibold mb-2">פרטי הצ׳ק:</p>
+              <div className="grid grid-cols-2 gap-y-1 gap-x-4">
+                <div><span className="text-slate-500">מספר צ׳ק: </span>{data.check_number || '—'}</div>
+                <div><span className="text-slate-500">בנק: </span>{data.check_bank || '—'}</div>
+                <div><span className="text-slate-500">סניף: </span>{data.check_branch || '—'}</div>
+                <div><span className="text-slate-500">מספר חשבון: </span>{data.check_account || '—'}</div>
+                <div><span className="text-slate-500">תאריך פרעון: </span>{data.check_due_date ? formatDate(data.check_due_date) : '—'}</div>
+                <div><span className="text-slate-500">סכום: </span><span className="font-semibold">{formatCurrency(total)}</span></div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

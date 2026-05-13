@@ -86,7 +86,18 @@ interface GenerateArgs {
     warranty_provider?: string | null;
     importer_type?: 'official' | 'parallel' | null;
   }[];
-  payment: { method: string; amount: number; card_last4?: string | null; auth_code?: string | null; check_number?: string | null; transfer_ref?: string | null } | null;
+  payment: {
+    method: string;
+    amount: number;
+    card_last4?: string | null;
+    auth_code?: string | null;
+    check_number?: string | null;
+    check_bank?: string | null;
+    check_branch?: string | null;
+    check_account?: string | null;
+    check_due_date?: string | null;
+    transfer_ref?: string | null;
+  } | null;
   settings: any;
 }
 

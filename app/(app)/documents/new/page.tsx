@@ -74,6 +74,10 @@ export default async function NewDocumentPage({
               auth_code: srcPayment.auth_code ?? '',
               check_number: srcPayment.check_number ?? '',
               check_bank: srcPayment.check_bank ?? '',
+              check_branch: srcPayment.check_branch ?? '',
+              check_account: srcPayment.check_account ?? '',
+              // Don't auto-copy due date (each check has its own date)
+              check_due_date: '',
               transfer_ref: srcPayment.transfer_ref ?? '',
             }
           : null,

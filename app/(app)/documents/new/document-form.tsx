@@ -63,6 +63,9 @@ interface PrefillData {
     auth_code: string;
     check_number: string;
     check_bank: string;
+    check_branch?: string;
+    check_account?: string;
+    check_due_date?: string;
     transfer_ref: string;
   } | null;
   sourceNumber?: number;
@@ -126,6 +129,9 @@ export function DocumentForm({
   const [authCode, setAuthCode] = useState(prefill?.payment?.auth_code ?? '');
   const [checkNumber, setCheckNumber] = useState(prefill?.payment?.check_number ?? '');
   const [checkBank, setCheckBank] = useState(prefill?.payment?.check_bank ?? '');
+  const [checkBranch, setCheckBranch] = useState(prefill?.payment?.check_branch ?? '');
+  const [checkAccount, setCheckAccount] = useState(prefill?.payment?.check_account ?? '');
+  const [checkDueDate, setCheckDueDate] = useState(prefill?.payment?.check_due_date ?? '');
   const [transferRef, setTransferRef] = useState(prefill?.payment?.transfer_ref ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -156,6 +162,9 @@ export function DocumentForm({
           auth_code: authCode,
           check_number: checkNumber,
           check_bank: checkBank,
+          check_branch: checkBranch,
+          check_account: checkAccount,
+          check_due_date: checkDueDate,
           transfer_ref: transferRef,
         },
       };
@@ -265,6 +274,9 @@ export function DocumentForm({
                 auth_code: authCode || null,
                 check_number: checkNumber || null,
                 check_bank: checkBank || null,
+                check_branch: checkBranch || null,
+                check_account: checkAccount || null,
+                check_due_date: checkDueDate || null,
                 transfer_ref: transferRef || null,
               }
             : null,
@@ -314,6 +326,10 @@ export function DocumentForm({
             card_last4: cardLast4,
             auth_code: authCode,
             check_number: checkNumber,
+            check_bank: checkBank,
+            check_branch: checkBranch,
+            check_account: checkAccount,
+            check_due_date: checkDueDate,
             transfer_ref: transferRef,
             needsPayment: docNeedsPayment,
             expectedNumber: nextNumbers[docType] ?? 1,
@@ -499,7 +515,31 @@ export function DocumentForm({
                 </div>
                 <div className="space-y-1.5">
                   <Label>בנק</Label>
-                  <Input value={checkBank} onChange={(e) => setCheckBank(e.target.value)} />
+                  <Input
+                    value={checkBank}
+                    onChange={(e) => setCheckBank(e.target.value)}
+                    placeholder='לדוגמה: "פועלים" (12)'
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>סניף (אופציונלי)</Label>
+                  <Input
+                    value={checkBranch}
+                    onChange={(e) => setCheckBranch(e.target.value)}
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>מספר חשבון</Label>
+                  <Input
+                    value={checkAccount}
+                    onChange={(e) => setCheckAccount(e.target.value)}
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>תאריך פרעון</Label>
+                  <DatePicker value={checkDueDate} onChange={setCheckDueDate} />
                 </div>
               </>
             )}

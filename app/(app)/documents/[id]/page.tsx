@@ -140,11 +140,26 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
       {payments && payments.length > 0 && (
         <Card>
           <CardHeader><CardTitle>תשלום</CardTitle></CardHeader>
-          <CardContent className="space-y-1">
+          <CardContent className="space-y-3">
             {payments.map((p: any) => (
-              <div key={p.id} className="flex justify-between border-b last:border-b-0 py-2">
-                <span>{paymentMethodLabel[p.method]}{p.card_last4 ? ` (${p.card_last4})` : ''}{p.auth_code ? ` · אסמכתה: ${p.auth_code}` : ''}</span>
-                <span className="font-semibold">{formatCurrency(Number(p.amount))}</span>
+              <div key={p.id} className="space-y-2">
+                <div className="flex justify-between border-b py-2">
+                  <span>{paymentMethodLabel[p.method]}{p.card_last4 ? ` (${p.card_last4})` : ''}{p.auth_code ? ` · אסמכתה: ${p.auth_code}` : ''}</span>
+                  <span className="font-semibold">{formatCurrency(Number(p.amount))}</span>
+                </div>
+                {p.method === 'check' && (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    <p className="font-semibold mb-2">פרטי הצ׳ק:</p>
+                    <div className="grid grid-cols-2 gap-y-1 gap-x-4">
+                      <div><span className="text-muted-foreground">מספר צ׳ק: </span>{p.check_number || '—'}</div>
+                      <div><span className="text-muted-foreground">בנק: </span>{p.check_bank || '—'}</div>
+                      <div><span className="text-muted-foreground">סניף: </span>{p.check_branch || '—'}</div>
+                      <div><span className="text-muted-foreground">מספר חשבון: </span>{p.check_account || '—'}</div>
+                      <div><span className="text-muted-foreground">תאריך פרעון: </span>{p.check_due_date ? formatDate(p.check_due_date) : '—'}</div>
+                      <div><span className="text-muted-foreground">סכום: </span><span className="font-semibold">{formatCurrency(Number(p.amount))}</span></div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </CardContent>

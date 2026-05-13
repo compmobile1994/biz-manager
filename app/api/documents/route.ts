@@ -80,6 +80,9 @@ export async function POST(request: Request) {
       auth_code: data.payment.auth_code ?? null,
       check_number: data.payment.check_number ?? null,
       check_bank: data.payment.check_bank ?? null,
+      check_branch: data.payment.check_branch ?? null,
+      check_account: data.payment.check_account ?? null,
+      check_due_date: data.payment.check_due_date ?? null,
       transfer_ref: data.payment.transfer_ref ?? null,
     });
     if (payErr) return NextResponse.json({ error: payErr.message }, { status: 500 });

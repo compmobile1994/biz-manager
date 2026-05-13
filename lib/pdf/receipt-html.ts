@@ -16,7 +16,18 @@ interface BuildArgs {
     warranty_provider?: string | null;
     importer_type?: 'official' | 'parallel' | null;
   }[];
-  payment: { method: string; amount: number; card_last4?: string | null; auth_code?: string | null; check_number?: string | null; transfer_ref?: string | null } | null;
+  payment: {
+    method: string;
+    amount: number;
+    card_last4?: string | null;
+    auth_code?: string | null;
+    check_number?: string | null;
+    check_bank?: string | null;
+    check_branch?: string | null;
+    check_account?: string | null;
+    check_due_date?: string | null;
+    transfer_ref?: string | null;
+  } | null;
   settings: any;
   logoDataUrl?: string | null;
   signatureDataUrl?: string | null;
@@ -98,6 +109,29 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
       </table>
     `;
 
+  // Detailed check panel (rendered only for method=check, shown under the payment table)
+  const checkDetailsBlock = payment && payment.method === 'check'
+    ? `
+      <div style="margin-top:12px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; font-size:10pt;">
+        <p style="font-weight:700; margin:0 0 8px;">פרטי הצ׳ק:</p>
+        <table style="width:100%; font-size:10pt; line-height:1.7;">
+          <tr>
+            <td style="color:#64748b; width:25%;">מספר צ׳ק:</td><td style="width:25%;">${escapeHtml(payment.check_number || '—')}</td>
+            <td style="color:#64748b; width:25%;">בנק:</td><td style="width:25%;">${escapeHtml(payment.check_bank || '—')}</td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">סניף:</td><td>${escapeHtml(payment.check_branch || '—')}</td>
+            <td style="color:#64748b;">מספר חשבון:</td><td>${escapeHtml(payment.check_account || '—')}</td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">תאריך פרעון:</td><td>${payment.check_due_date ? escapeHtml(formatDate(payment.check_due_date)) : '—'}</td>
+            <td style="color:#64748b;">סכום:</td><td style="font-weight:700;">${escapeHtml(formatCurrency(payment.amount))}</td>
+          </tr>
+        </table>
+      </div>
+    `
+    : '';
+
   const paymentBlock = payment
     ? `
       <div style="margin-top:16px;">
@@ -127,6 +161,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
             </tr>
           </tbody>
         </table>
+        ${checkDetailsBlock}
       </div>
     `
     : '';

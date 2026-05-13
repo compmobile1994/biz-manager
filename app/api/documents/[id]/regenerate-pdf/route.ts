@@ -79,6 +79,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             card_last4: payments[0].card_last4,
             auth_code: payments[0].auth_code,
             check_number: payments[0].check_number,
+            check_bank: payments[0].check_bank,
+            check_branch: payments[0].check_branch,
+            check_account: payments[0].check_account,
+            check_due_date: payments[0].check_due_date,
             transfer_ref: payments[0].transfer_ref,
           }
         : null,
