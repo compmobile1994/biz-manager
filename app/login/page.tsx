@@ -43,6 +43,12 @@ export default function LoginPage() {
           });
           if (!error) {
             localStorage.setItem(REMEMBERED_EMAIL_KEY, cred.id);
+            // Best-effort: record the login event (auto-login via stored credential)
+            fetch('/api/auth/log-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: 'auto-credential' }),
+            }).catch(() => {});
             router.push('/');
             router.refresh();
           }
@@ -70,6 +76,13 @@ export default function LoginPage() {
       if (mode === 'sign_up') {
         toast({ title: 'נשלח מייל אימות', description: 'אנא בדוק את תיבת הדואר שלך לאישור החשבון.' });
       } else {
+        // Best-effort: record the login event (visible later in /settings/security)
+        fetch('/api/auth/log-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: 'password' }),
+        }).catch(() => {});
+
         // Persist email + offer credential storage so future visits auto-login
         try {
           localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
@@ -153,13 +166,14 @@ export default function LoginPage() {
               💡 אחרי שתתחבר פעם אחת — הדפדפן ישמור את הסיסמה והאתר ינסה להיכנס אוטומטית בפעם הבאה
             </p>
           )}
-          <button
-            type="button"
-            className="text-sm text-muted-foreground hover:text-foreground w-full text-center"
-            onClick={() => setMode((m) => (m === 'sign_in' ? 'sign_up' : 'sign_in'))}
-          >
-            {mode === 'sign_in' ? 'אין לי חשבון - להירשם' : 'יש לי חשבון - להתחבר'}
-          </button>
+          {/*
+            ההרשמה הפומבית בוטלה מהממשק — רק המשתמש הקיים יכול להיכנס.
+            כדי לפתוח שוב, מחזירים את הכפתור הבא:
+
+            <button onClick={() => setMode(m => m === 'sign_in' ? 'sign_up' : 'sign_in')}>
+              {mode === 'sign_in' ? 'אין לי חשבון - להירשם' : 'יש לי חשבון - להתחבר'}
+            </button>
+          */}
         </CardContent>
       </Card>
     </div>
