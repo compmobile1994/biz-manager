@@ -13,7 +13,7 @@ export function RegenerateAllButton() {
     if (running) return;
     if (
       !confirm(
-        'לחדש את כל הקבלות הקיימות עם התבנית החדשה (כולל בס"ד)?\nהפעולה עשויה לקחת דקה-שתיים אם יש הרבה מסמכים.',
+        'לחדש את כל קבצי ה-PDF של הקבלות הקיימות עם התבנית החדשה (כולל בס"ד)?\nהפעולה עשויה לקחת דקה-שתיים אם יש הרבה מסמכים.',
       )
     )
       return;
@@ -23,7 +23,7 @@ export function RegenerateAllButton() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'שגיאה');
       toast({
-        title: 'PDFים חודשו',
+        title: 'קבצי ה-PDF חודשו',
         description: `${json.regenerated} מתוך ${json.total}${json.failed ? ` · ${json.failed} נכשלו` : ''}`,
       });
     } catch (e: any) {
@@ -36,7 +36,7 @@ export function RegenerateAllButton() {
   return (
     <Button variant="outline" size="sm" onClick={run} disabled={running}>
       <RefreshCw className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
-      {running ? 'מחדש...' : 'חדש את כל ה-PDFים'}
+      {running ? 'מחדש...' : 'חדש את כל קבצי ה-PDF'}
     </Button>
   );
 }
