@@ -116,17 +116,8 @@ export function DocumentForm({
   const total = useMemo(() => lines.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0), 0), [lines]);
   const docNeedsPayment = docType === 'receipt' || docType === 'invoice_receipt';
 
-  // אם נבחר לקוח קיים - מילוי שדות הצילום
-  useEffect(() => {
-    if (!customerId) return;
-    const c = customers.find((x) => x.id === customerId);
-    if (!c) return;
-    setCustomerName(c.name);
-    setCustomerTaxId(c.tax_id ?? '');
-    setCustomerAddress(c.address ?? '');
-    setCustomerEmail(c.email ?? '');
-    setCustomerPhone(c.phone ?? '');
-  }, [customerId, customers]);
+  // Customer auto-fill now happens directly in the search input's onChange below.
+  // (Old useEffect from when there was a separate Select picker — no longer needed.)
 
   function updateLine(idx: number, patch: Partial<Line>) {
     setLines((curr) => curr.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -305,20 +296,45 @@ export function DocumentForm({
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5 md:col-span-2">
-            <Label>בחר לקוח קיים (אופציונלי)</Label>
-            <Select value={customerId || '__new__'} onValueChange={(v) => setCustomerId(v === '__new__' ? '' : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__new__">— לקוח חדש / חד פעמי —</SelectItem>
-                {customers.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}{c.tax_id ? ` · ${c.tax_id}` : ''}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>שם הלקוח (חובה)</Label>
-            <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+            <Label>
+              שם הלקוח (חובה)
+              {customers.length > 0 && (
+                <span className="text-blue-600 mr-2 text-xs">💡 {customers.length} לקוחות שמורים — הקלד לחיפוש</span>
+              )}
+            </Label>
+            <Input
+              list="customers-search-list"
+              placeholder="הקלד שם לחיפוש לקוח קיים, או שם חדש"
+              value={customerName}
+              onChange={(e) => {
+                const newName = e.target.value;
+                // Check if the typed value matches an existing customer (auto-fill from picker)
+                const match = customers.find((c) => c.name === newName);
+                if (match) {
+                  setCustomerId(match.id);
+                  setCustomerName(match.name);
+                  setCustomerTaxId(match.tax_id ?? '');
+                  setCustomerAddress(match.address ?? '');
+                  setCustomerEmail(match.email ?? '');
+                  setCustomerPhone(match.phone ?? '');
+                } else {
+                  // User typing — clear customerId so saved as new
+                  if (customerId) setCustomerId('');
+                  setCustomerName(newName);
+                }
+              }}
+              autoComplete="off"
+            />
+            <datalist id="customers-search-list">
+              {customers.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.tax_id ? `ת״ז: ${c.tax_id}` : ''}
+                </option>
+              ))}
+            </datalist>
+            {customerId && (
+              <p className="text-xs text-emerald-600">✓ לקוח קיים נבחר — הפרטים מולאו אוטומטית</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label>ת״ז / ח.פ.</Label>
