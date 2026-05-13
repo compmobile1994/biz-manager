@@ -120,12 +120,11 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
             <td style="color:#64748b; width:25%;">בנק:</td><td style="width:25%;">${escapeHtml(payment.check_bank || '—')}</td>
           </tr>
           <tr>
-            <td style="color:#64748b;">סניף:</td><td>${escapeHtml(payment.check_branch || '—')}</td>
             <td style="color:#64748b;">מספר חשבון:</td><td>${escapeHtml(payment.check_account || '—')}</td>
+            <td style="color:#64748b;">תאריך פרעון:</td><td>${payment.check_due_date ? escapeHtml(formatDate(payment.check_due_date)) : '—'}</td>
           </tr>
           <tr>
-            <td style="color:#64748b;">תאריך פרעון:</td><td>${payment.check_due_date ? escapeHtml(formatDate(payment.check_due_date)) : '—'}</td>
-            <td style="color:#64748b;">סכום:</td><td style="font-weight:700;">${escapeHtml(formatCurrency(payment.amount))}</td>
+            <td style="color:#64748b;">סכום:</td><td style="font-weight:700;" colspan="3">${escapeHtml(formatCurrency(payment.amount))}</td>
           </tr>
         </table>
       </div>

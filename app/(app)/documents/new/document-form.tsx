@@ -522,14 +522,6 @@ export function DocumentForm({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>סניף (אופציונלי)</Label>
-                  <Input
-                    value={checkBranch}
-                    onChange={(e) => setCheckBranch(e.target.value)}
-                    inputMode="numeric"
-                  />
-                </div>
-                <div className="space-y-1.5">
                   <Label>מספר חשבון</Label>
                   <Input
                     value={checkAccount}

@@ -153,10 +153,9 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                     <div className="grid grid-cols-2 gap-y-1 gap-x-4">
                       <div><span className="text-muted-foreground">מספר צ׳ק: </span>{p.check_number || '—'}</div>
                       <div><span className="text-muted-foreground">בנק: </span>{p.check_bank || '—'}</div>
-                      <div><span className="text-muted-foreground">סניף: </span>{p.check_branch || '—'}</div>
                       <div><span className="text-muted-foreground">מספר חשבון: </span>{p.check_account || '—'}</div>
                       <div><span className="text-muted-foreground">תאריך פרעון: </span>{p.check_due_date ? formatDate(p.check_due_date) : '—'}</div>
-                      <div><span className="text-muted-foreground">סכום: </span><span className="font-semibold">{formatCurrency(Number(p.amount))}</span></div>
+                      <div className="col-span-2"><span className="text-muted-foreground">סכום: </span><span className="font-semibold">{formatCurrency(Number(p.amount))}</span></div>
                     </div>
                   </div>
                 )}

@@ -230,10 +230,9 @@ export function DocumentPreview({
               <div className="grid grid-cols-2 gap-y-1 gap-x-4">
                 <div><span className="text-slate-500">מספר צ׳ק: </span>{data.check_number || '—'}</div>
                 <div><span className="text-slate-500">בנק: </span>{data.check_bank || '—'}</div>
-                <div><span className="text-slate-500">סניף: </span>{data.check_branch || '—'}</div>
                 <div><span className="text-slate-500">מספר חשבון: </span>{data.check_account || '—'}</div>
                 <div><span className="text-slate-500">תאריך פרעון: </span>{data.check_due_date ? formatDate(data.check_due_date) : '—'}</div>
-                <div><span className="text-slate-500">סכום: </span><span className="font-semibold">{formatCurrency(total)}</span></div>
+                <div className="col-span-2"><span className="text-slate-500">סכום: </span><span className="font-semibold">{formatCurrency(total)}</span></div>
               </div>
             </div>
           )}
