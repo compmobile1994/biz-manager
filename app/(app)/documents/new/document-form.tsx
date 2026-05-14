@@ -292,9 +292,16 @@ export function DocumentForm({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'שגיאה ביצירת המסמך');
       toast({ title: 'המסמך נוצר', description: `${documentTypeLabel[docType]} #${json.number}` });
-      // Delete the draft (if any) now that the real document was issued
+      // Delete the draft (if any) now that the real document was issued.
+      // We `await` here so the request reaches the server *before* the
+      // navigation tears down the page — otherwise the fetch gets aborted
+      // and the draft is left behind in the "טיוטות" list.
       if (currentDraftId) {
-        fetch(`/api/drafts/${currentDraftId}`, { method: 'DELETE' }).catch(() => {});
+        try {
+          await fetch(`/api/drafts/${currentDraftId}`, { method: 'DELETE' });
+        } catch {
+          // Best-effort: if it fails, the user can still delete the draft manually
+        }
       }
       // Pass through ?action=whatsapp so the detail page auto-triggers WhatsApp share once the PDF is ready
       const suffix = opts.thenWhatsApp ? '?action=whatsapp' : '';
