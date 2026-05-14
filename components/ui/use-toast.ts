@@ -5,6 +5,7 @@ import type { ToastActionElement, ToastProps } from '@/components/ui/toast';
 
 const TOAST_LIMIT = 3;
 const TOAST_REMOVE_DELAY = 4000;
+const TOAST_AUTO_DISMISS_MS = 5000;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -67,6 +68,9 @@ export function toast({ ...props }: Omit<ToasterToast, 'id'>) {
     type: 'ADD',
     toast: { ...props, id, open: true, onOpenChange: (open) => !open && dispatch({ type: 'DISMISS', id }) },
   });
+  // Explicit auto-dismiss timer — kicks in after 5 seconds so toasts never
+  // hang on screen, regardless of whether Radix's own duration triggers.
+  setTimeout(() => dispatch({ type: 'DISMISS', id }), TOAST_AUTO_DISMISS_MS);
   return { id, dismiss: () => dispatch({ type: 'DISMISS', id }) };
 }
 

@@ -55,6 +55,8 @@ interface PrefillData {
   customer_name: string;
   customer_tax_id: string;
   customer_address: string;
+  customer_email?: string;
+  customer_phone?: string;
   notes: string;
   lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number; phone_number?: string; imei?: string; warranty_months?: number | null; warranty_provider?: string | null; importer_type?: 'official' | 'parallel' | null }[];
   payment: {
@@ -107,8 +109,8 @@ export function DocumentForm({
   const [customerName, setCustomerName] = useState(prefill?.customer_name ?? '');
   const [customerTaxId, setCustomerTaxId] = useState(prefill?.customer_tax_id ?? '');
   const [customerAddress, setCustomerAddress] = useState(prefill?.customer_address ?? '');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState(prefill?.customer_email ?? '');
+  const [customerPhone, setCustomerPhone] = useState(prefill?.customer_phone ?? '');
   const [notes, setNotes] = useState(prefill?.notes ?? '');
   const [lines, setLines] = useState<Line[]>(
     prefill?.lines && prefill.lines.length > 0

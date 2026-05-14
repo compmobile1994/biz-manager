@@ -35,6 +35,8 @@ export default async function NewDocumentPage({
         customer_name: d.customer_name ?? '',
         customer_tax_id: d.customer_tax_id ?? '',
         customer_address: d.customer_address ?? '',
+        customer_email: d.customer_email ?? '',
+        customer_phone: d.customer_phone ?? '',
         notes: d.notes ?? '',
         lines: d.lines ?? [],
         payment: d.payment ?? null,
