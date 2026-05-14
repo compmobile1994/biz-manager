@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { documentTypeLabel, formatCurrency, paymentMethodLabel } from '@/lib/utils';
 import type { DocumentType, PaymentMethod } from '@/lib/supabase/types';
 import { DocumentPreview, type PreviewSettings } from './document-preview';
+import { ImeiScanner } from '@/components/imei-scanner';
 
 type CustomerLite = { id: string; name: string; email: string | null; phone: string | null; address: string | null; tax_id: string | null };
 type SavedItemLite = { id: string; name: string; description: string | null; default_price: number };
@@ -234,7 +235,7 @@ export function DocumentForm({
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async function submit() {
+  async function submit(opts: { thenWhatsApp?: boolean } = {}) {
     if (!validate()) return;
 
     setSubmitting(true);
@@ -289,7 +290,9 @@ export function DocumentForm({
       if (currentDraftId) {
         fetch(`/api/drafts/${currentDraftId}`, { method: 'DELETE' }).catch(() => {});
       }
-      router.push(`/documents/${json.id}`);
+      // Pass through ?action=whatsapp so the detail page auto-triggers WhatsApp share once the PDF is ready
+      const suffix = opts.thenWhatsApp ? '?action=whatsapp' : '';
+      router.push(`/documents/${json.id}${suffix}`);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'שגיאה', description: e.message });
     } finally {
@@ -343,9 +346,14 @@ export function DocumentForm({
           <Button variant="ghost" onClick={() => setStep('edit')} disabled={submitting}>
             ← חזור לעריכה
           </Button>
-          <Button onClick={submit} disabled={submitting} size="lg">
-            {submitting ? 'יוצר…' : 'אשר והפק PDF'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => submit()} disabled={submitting} size="lg" variant="outline">
+              {submitting ? 'יוצר…' : 'אשר והפק'}
+            </Button>
+            <Button onClick={() => submit({ thenWhatsApp: true })} disabled={submitting} size="lg" className="bg-green-600 hover:bg-green-700">
+              {submitting ? 'יוצר…' : '📲 אשר, הפק ושלח ב-WhatsApp'}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -698,13 +706,17 @@ function LineRow({
         </div>
         <div className="md:col-span-6 space-y-1">
           <Label className="text-xs">IMEI (אופציונלי - למכירת מכשיר)</Label>
-          <Input
-            placeholder="15 ספרות, לדוגמה 351234567890123"
-            inputMode="numeric"
-            maxLength={20}
-            value={line.imei}
-            onChange={(e) => onChange({ imei: e.target.value })}
-          />
+          <div className="flex gap-2">
+            <Input
+              placeholder="15 ספרות, לדוגמה 351234567890123"
+              inputMode="numeric"
+              maxLength={20}
+              value={line.imei}
+              onChange={(e) => onChange({ imei: e.target.value })}
+              className="flex-1"
+            />
+            <ImeiScanner onScan={(imei) => onChange({ imei })} />
+          </div>
         </div>
         <div className="md:col-span-3 space-y-1">
           <Label className="text-xs">אחריות (חודשים)</Label>

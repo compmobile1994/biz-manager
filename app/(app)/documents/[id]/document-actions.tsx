@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone, Landmark, Copy, XCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ export function DocumentActions({
   status: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [emailDialog, setEmailDialog] = useState(false);
   const [emailTo, setEmailTo] = useState(customerEmail ?? '');
@@ -52,6 +53,22 @@ export function DocumentActions({
   const [smsDialog, setSmsDialog] = useState(false);
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const autoTriggered = useRef(false);
+
+  // If we landed here with ?action=whatsapp (set by the "issue + send" button
+  // on the form), automatically open the WhatsApp share flow once the PDF
+  // URL is available. Guarded so we only run once per page load.
+  useEffect(() => {
+    if (autoTriggered.current) return;
+    if (searchParams.get('action') !== 'whatsapp') return;
+    if (!pdfUrl) return;
+    autoTriggered.current = true;
+    // Strip the ?action=whatsapp so a refresh doesn't fire it again
+    router.replace(`/documents/${docId}`);
+    // Slight delay so the UI settles before the popup
+    setTimeout(() => shareWhatsApp(), 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfUrl, searchParams]);
 
   async function cancelDoc() {
     if (
