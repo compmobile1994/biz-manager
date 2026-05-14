@@ -27,6 +27,7 @@ interface BuildArgs {
     check_account?: string | null;
     check_due_date?: string | null;
     transfer_ref?: string | null;
+    other_description?: string | null;
   } | null;
   settings: any;
   logoDataUrl?: string | null;
@@ -149,7 +150,9 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
                 payment.card_last4 ? ` (${escapeHtml(payment.card_last4)})` : ''
               }${payment.auth_code ? ` · ${escapeHtml(payment.auth_code)}` : ''}${
                 payment.check_number ? ` · צ׳ק ${escapeHtml(payment.check_number)}` : ''
-              }${payment.transfer_ref ? ` · ${escapeHtml(payment.transfer_ref)}` : ''}</td>
+              }${payment.transfer_ref ? ` · ${escapeHtml(payment.transfer_ref)}` : ''}${
+                payment.method === 'other' && payment.other_description ? ` · ${escapeHtml(payment.other_description)}` : ''
+              }</td>
               <td style="padding:8px;">${dateStr}</td>
               <td style="padding:8px;">${escapeHtml(formatCurrency(payment.amount))}</td>
             </tr>

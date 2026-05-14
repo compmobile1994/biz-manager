@@ -44,6 +44,7 @@ export interface PreviewData {
   check_account?: string;
   check_due_date?: string;
   transfer_ref: string;
+  other_description?: string;
   needsPayment: boolean;
   expectedNumber: number;
 }
@@ -99,6 +100,7 @@ export function DocumentPreview({
     data.auth_code ? `· ${data.auth_code}` : '',
     data.check_number ? `· צ׳ק ${data.check_number}` : '',
     data.transfer_ref ? `· ${data.transfer_ref}` : '',
+    data.payment_method === 'other' && data.other_description ? `· ${data.other_description}` : '',
   ]
     .filter(Boolean)
     .join(' ');

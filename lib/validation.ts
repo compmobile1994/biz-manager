@@ -31,6 +31,7 @@ export const paymentSchema = z.object({
     .optional()
     .or(z.literal('').transform(() => null)),
   transfer_ref: z.string().nullable().optional(),
+  other_description: z.string().nullable().optional(),
 });
 
 export const newDocumentSchema = z.object({

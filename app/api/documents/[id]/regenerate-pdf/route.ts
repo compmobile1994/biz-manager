@@ -84,6 +84,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             check_account: payments[0].check_account,
             check_due_date: payments[0].check_due_date,
             transfer_ref: payments[0].transfer_ref,
+            other_description: payments[0].other_description,
           }
         : null,
       settings: settingsForPdf,

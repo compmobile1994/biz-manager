@@ -97,6 +97,7 @@ interface GenerateArgs {
     check_account?: string | null;
     check_due_date?: string | null;
     transfer_ref?: string | null;
+    other_description?: string | null;
   } | null;
   settings: any;
 }

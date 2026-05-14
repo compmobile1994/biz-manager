@@ -79,6 +79,7 @@ export default async function NewDocumentPage({
               // Don't auto-copy due date (each check has its own date)
               check_due_date: '',
               transfer_ref: srcPayment.transfer_ref ?? '',
+              other_description: srcPayment.other_description ?? '',
             }
           : null,
         sourceNumber: srcDoc.number,

@@ -144,7 +144,12 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
             {payments.map((p: any) => (
               <div key={p.id} className="space-y-2">
                 <div className="flex justify-between border-b py-2">
-                  <span>{paymentMethodLabel[p.method]}{p.card_last4 ? ` (${p.card_last4})` : ''}{p.auth_code ? ` · אסמכתה: ${p.auth_code}` : ''}</span>
+                  <span>
+                    {paymentMethodLabel[p.method]}
+                    {p.card_last4 ? ` (${p.card_last4})` : ''}
+                    {p.auth_code ? ` · אסמכתה: ${p.auth_code}` : ''}
+                    {p.method === 'other' && p.other_description ? ` · ${p.other_description}` : ''}
+                  </span>
                   <span className="font-semibold">{formatCurrency(Number(p.amount))}</span>
                 </div>
                 {p.method === 'check' && (

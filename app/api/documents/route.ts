@@ -95,6 +95,7 @@ export async function POST(request: Request) {
       check_account: data.payment.check_account ?? null,
       check_due_date: data.payment.check_due_date ?? null,
       transfer_ref: data.payment.transfer_ref ?? null,
+      other_description: data.payment.other_description ?? null,
     });
     if (payErr) {
       await rollback();

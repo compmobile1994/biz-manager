@@ -67,6 +67,7 @@ interface PrefillData {
     check_branch?: string;
     check_account?: string;
     check_due_date?: string;
+    other_description?: string;
     transfer_ref: string;
   } | null;
   sourceNumber?: number;
@@ -134,6 +135,7 @@ export function DocumentForm({
   const [checkAccount, setCheckAccount] = useState(prefill?.payment?.check_account ?? '');
   const [checkDueDate, setCheckDueDate] = useState(prefill?.payment?.check_due_date ?? '');
   const [transferRef, setTransferRef] = useState(prefill?.payment?.transfer_ref ?? '');
+  const [otherDescription, setOtherDescription] = useState(prefill?.payment?.other_description ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId ?? null);
@@ -167,6 +169,7 @@ export function DocumentForm({
           check_account: checkAccount,
           check_due_date: checkDueDate,
           transfer_ref: transferRef,
+          other_description: otherDescription,
         },
       };
       const res = await fetch('/api/drafts', {
@@ -256,9 +259,9 @@ export function DocumentForm({
           lines: lines.map((l, i) => ({
             saved_item_id: l.saved_item_id,
             description: l.description,
-            quantity: Number(l.quantity),
-            unit_price: Number(l.unit_price),
-            line_total: Number(l.quantity) * Number(l.unit_price),
+            quantity: Math.round(Number(l.quantity)),
+            unit_price: Math.round(Number(l.unit_price)),
+            line_total: Math.round(Number(l.quantity) * Number(l.unit_price)),
             sort_order: i,
             phone_number: l.phone_number?.trim() || null,
             imei: l.imei?.trim() || null,
@@ -269,7 +272,7 @@ export function DocumentForm({
           payment: docNeedsPayment
             ? {
                 method: paymentMethod,
-                amount: total,
+                amount: Math.round(total),
                 card_last4: cardLast4 || null,
                 card_holder: cardHolder || null,
                 auth_code: authCode || null,
@@ -279,6 +282,7 @@ export function DocumentForm({
                 check_account: checkAccount || null,
                 check_due_date: checkDueDate || null,
                 transfer_ref: transferRef || null,
+                other_description: paymentMethod === 'other' ? otherDescription || null : null,
               }
             : null,
         }),
@@ -334,6 +338,7 @@ export function DocumentForm({
             check_account: checkAccount,
             check_due_date: checkDueDate,
             transfer_ref: transferRef,
+            other_description: otherDescription,
             needsPayment: docNeedsPayment,
             expectedNumber: nextNumbers[docType] ?? 1,
           }}
@@ -549,6 +554,16 @@ export function DocumentForm({
                 <Input value={transferRef} onChange={(e) => setTransferRef(e.target.value)} />
               </div>
             )}
+            {paymentMethod === 'other' && (
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>איך שולם? (חובה)</Label>
+                <Input
+                  value={otherDescription}
+                  onChange={(e) => setOtherDescription(e.target.value)}
+                  placeholder='לדוגמה: "קיזוז חוב", "שובר זיכוי", "החלפה"'
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -665,20 +680,21 @@ function LineRow({
           <Label className="text-xs">כמות</Label>
           <Input
             type="number"
-            step="0.001"
+            step="1"
             min="0"
             value={line.quantity}
-            onChange={(e) => onChange({ quantity: Number(e.target.value) })}
+            onChange={(e) => onChange({ quantity: Math.round(Number(e.target.value)) })}
           />
         </div>
         <div className="md:col-span-4 space-y-1">
           <Label className="text-xs">מחיר יחידה (₪)</Label>
           <Input
             type="number"
-            step="0.01"
+            step="1"
             min="0"
+            inputMode="numeric"
             value={line.unit_price}
-            onChange={(e) => onChange({ unit_price: Number(e.target.value) })}
+            onChange={(e) => onChange({ unit_price: Math.round(Number(e.target.value)) })}
           />
         </div>
         <div className="md:col-span-5 space-y-1">
