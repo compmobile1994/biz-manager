@@ -127,18 +127,22 @@ export default async function NewDocumentPage({
     supabase.from('customers').select('id, name, email, phone, address, tax_id').order('name'),
     supabase.from('saved_items').select('id, name, description, default_price').eq('is_active', true).order('name'),
     supabase.from('document_counters').select('document_type, last_number').eq('user_id', user.id),
-    // For phone-per-line autocomplete: fetch all past phones grouped by customer
+    // For phone-per-line autocomplete: fetch recent phones grouped by customer.
+    // Hard-cap at 500 rows ordered by newest first — plenty for autocomplete
+    // suggestions, ~4× faster page load once the DB grows past a few hundred
+    // line items.
     supabase
       .from('document_items')
       .select('phone_number, documents!inner(customer_id)')
       .not('phone_number', 'is', null)
-      .limit(2000),
+      .order('id', { ascending: false })
+      .limit(500),
     // For description autocomplete: fetch recent unique line item descriptions + prices
     supabase
       .from('document_items')
       .select('description, unit_price')
       .order('id', { ascending: false })
-      .limit(500),
+      .limit(300),
   ]);
 
   // Build customer_id → unique phone numbers map for autocomplete

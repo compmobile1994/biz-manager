@@ -5,7 +5,8 @@ export default async function CustomersPage() {
   const supabase = await createClient();
   const { data: customers } = await supabase
     .from('customers')
-    .select('*')
+    // Trim away user_id + created_at — not displayed nor edited on this page.
+    .select('id, name, email, phone, address, tax_id, notes, customer_type')
     .order('name', { ascending: true });
 
   return (
@@ -14,7 +15,7 @@ export default async function CustomersPage() {
         <h1 className="text-3xl font-bold">לקוחות</h1>
         <p className="text-muted-foreground">ניהול מאגר הלקוחות</p>
       </div>
-      <CustomersClient initial={customers ?? []} />
+      <CustomersClient initial={(customers as any) ?? []} />
     </div>
   );
 }
