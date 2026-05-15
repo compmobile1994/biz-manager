@@ -72,16 +72,15 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
   const renderDesc = (l: BuildArgs['lines'][number]): string => {
     const desc = escapeHtml(l.description);
     const extras: string[] = [];
-    if (l.phone_number) extras.push(`📱 ${escapeHtml(l.phone_number)}`);
+    if (l.phone_number) extras.push(`טלפון: ${escapeHtml(l.phone_number)}`);
     if (l.imei) extras.push(`IMEI: ${escapeHtml(l.imei)}`);
     if (l.warranty_months && l.warranty_months > 0) {
       const provider = l.warranty_provider ? ` (${escapeHtml(l.warranty_provider)})` : '';
-      extras.push(`🛡️ אחריות ${l.warranty_months} חודשים${provider} - עד ${warrantyExpiry(l.warranty_months)}`);
+      extras.push(`אחריות: ${l.warranty_months} חודשים${provider} — עד ${warrantyExpiry(l.warranty_months)}`);
     } else if (l.warranty_provider) {
-      // ספק אחריות צוין בלי משך
-      extras.push(`🛡️ אחריות: ${escapeHtml(l.warranty_provider)}`);
+      extras.push(`אחריות: ${escapeHtml(l.warranty_provider)}`);
     }
-    if (l.importer_type) extras.push(`📦 ${importerLabel(l.importer_type)}`);
+    if (l.importer_type) extras.push(importerLabel(l.importer_type));
     if (extras.length === 0) return desc;
     return `${desc}<br/><span style="color:#64748b; font-size:9pt;">${extras.join(' · ')}</span>`;
   };
@@ -274,7 +273,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
   <div class="bsd">בס&quot;ד</div>
   ${doc.status === 'cancelled' ? `
     <div class="cancelled-watermark"><span>מבוטל</span></div>
-    <div class="cancelled-banner">⚠️ קבלה זו בוטלה — אינה חיוב חוקי</div>
+    <div class="cancelled-banner">קבלה זו בוטלה — אינה חיוב חוקי</div>
   ` : ''}
   <div class="header">
     <div class="business-info">
@@ -306,7 +305,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
 
   ${settings?.bank_name && settings?.bank_account ? `
     <div style="margin-top:16px; padding:10px; border:1px dashed ${brand}66; border-radius:6px; background:${brand}0d;">
-      <p style="font-weight:700; font-size:10pt; margin:0 0 6px; color:${brand};">💳 לתשלום בהעברה בנקאית:</p>
+      <p style="font-weight:700; font-size:10pt; margin:0 0 6px; color:${brand};">לתשלום בהעברה בנקאית:</p>
       <table style="font-size:10pt; line-height:1.5;">
         <tr><td style="color:#64748b; padding-left:8px;">בנק:</td><td>${escapeHtml(settings.bank_name)}</td></tr>
         ${settings.bank_branch ? `<tr><td style="color:#64748b; padding-left:8px;">סניף:</td><td>${escapeHtml(settings.bank_branch)}</td></tr>` : ''}

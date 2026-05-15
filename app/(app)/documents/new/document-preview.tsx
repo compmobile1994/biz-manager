@@ -79,18 +79,18 @@ export function DocumentPreview({
 
   function lineExtras(l: PreviewLine): string[] {
     const extras: string[] = [];
-    if (l.phone_number) extras.push(`📱 ${l.phone_number}`);
+    if (l.phone_number) extras.push(`טלפון: ${l.phone_number}`);
     if (l.imei) extras.push(`IMEI: ${l.imei}`);
     if (l.warranty_months && l.warranty_months > 0) {
       const d = new Date(data.issue_date + 'T00:00:00');
       d.setMonth(d.getMonth() + l.warranty_months);
       const provider = l.warranty_provider ? ` (${l.warranty_provider})` : '';
-      extras.push(`🛡️ אחריות ${l.warranty_months} ח׳${provider} - עד ${formatDate(d)}`);
+      extras.push(`אחריות: ${l.warranty_months} ח׳${provider} — עד ${formatDate(d)}`);
     } else if (l.warranty_provider) {
-      extras.push(`🛡️ אחריות: ${l.warranty_provider}`);
+      extras.push(`אחריות: ${l.warranty_provider}`);
     }
     if (l.importer_type) {
-      extras.push(`📦 ${l.importer_type === 'official' ? 'יבואן רשמי' : 'יבואן מקביל'}`);
+      extras.push(l.importer_type === 'official' ? 'יבואן רשמי' : 'יבואן מקביל');
     }
     return extras;
   }

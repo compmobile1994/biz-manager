@@ -99,18 +99,18 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
             <tbody>
               {(items ?? []).map((it: any) => {
                 const extras: string[] = [];
-                if (it.phone_number) extras.push(`📱 ${it.phone_number}`);
+                if (it.phone_number) extras.push(`טלפון: ${it.phone_number}`);
                 if (it.imei) extras.push(`IMEI: ${it.imei}`);
                 if (it.warranty_months) {
                   const d = new Date(doc.issue_date + 'T00:00:00');
                   d.setMonth(d.getMonth() + it.warranty_months);
                   const provider = it.warranty_provider ? ` (${it.warranty_provider})` : '';
-                  extras.push(`🛡️ אחריות ${it.warranty_months} ח׳${provider} - עד ${formatDate(d)}`);
+                  extras.push(`אחריות: ${it.warranty_months} ח׳${provider} — עד ${formatDate(d)}`);
                 } else if (it.warranty_provider) {
-                  extras.push(`🛡️ אחריות: ${it.warranty_provider}`);
+                  extras.push(`אחריות: ${it.warranty_provider}`);
                 }
                 if (it.importer_type) {
-                  extras.push(`📦 ${it.importer_type === 'official' ? 'יבואן רשמי' : 'יבואן מקביל'}`);
+                  extras.push(it.importer_type === 'official' ? 'יבואן רשמי' : 'יבואן מקביל');
                 }
                 return (
                   <tr key={it.id} className="border-t">
