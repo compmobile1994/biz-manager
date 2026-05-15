@@ -640,12 +640,19 @@ function LineRow({
   const phonesListId = `phones-list-${idx}`;
   const itemsListId = `items-list-${idx}`;
 
-  // Plain description change — no auto-price-fill. The user has reported this
-  // surprising them more than helping, so the description input now only
-  // changes the description. Auto-fill of price still happens (explicitly)
-  // when the user picks an item from the saved-items dropdown.
+  // Plain description change — no auto-price-fill (that was surprising users).
+  // BUT: business rule from the user — any line that mentions "תיקון" (repair)
+  // gets 3-month warranty by default, except FRP services. We only apply this
+  // when the warranty field is still empty so we don't overwrite a value the
+  // user explicitly typed.
   function handleDescriptionChange(newDesc: string) {
-    onChange({ description: newDesc });
+    const patch: Partial<Line> = { description: newDesc };
+    const isRepair = newDesc.includes('תיקון');
+    const isFrp = /frp/i.test(newDesc);
+    if (isRepair && !isFrp && !line.warranty_months) {
+      patch.warranty_months = '3';
+    }
+    onChange(patch);
   }
   const lineTotal = Number(line.quantity || 0) * Number(line.unit_price || 0);
   return (
