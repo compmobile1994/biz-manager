@@ -37,6 +37,7 @@ export default async function NewDocumentPage({
       const d: any = draft.data;
       prefill = {
         document_type: d.document_type,
+        issue_date: d.issue_date,
         customer_id: d.customer_id,
         customer_name: d.customer_name ?? '',
         customer_tax_id: d.customer_tax_id ?? '',
