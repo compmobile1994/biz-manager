@@ -234,6 +234,8 @@ export function DocumentActions({
     setSmsDialog(false);
   }
 
+  const isCancelled = status === 'cancelled';
+
   return (
     <>
       <div className="flex flex-wrap gap-2">
@@ -250,26 +252,36 @@ export function DocumentActions({
             {regenerating ? 'יוצר…' : 'צור PDF עכשיו'}
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={() => setEmailDialog(true)}>
-          <Mail className="h-4 w-4" />
-          שלח במייל
-        </Button>
-        <Button variant="outline" size="sm" onClick={shareWhatsApp}>
-          <MessageCircle className="h-4 w-4" />
-          WhatsApp
-        </Button>
-        <Button variant="outline" size="sm" onClick={shareBitRequest}>
-          <Smartphone className="h-4 w-4" />
-          בקשת ביט
-        </Button>
-        <Button variant="outline" size="sm" onClick={shareBankTransferRequest}>
-          <Landmark className="h-4 w-4" />
-          בקשת העברה
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setSmsDialog(true)}>
-          <Phone className="h-4 w-4" />
-          SMS
-        </Button>
+        {/*
+          A cancelled receipt should never be re-sent to a customer — it's
+          legally void. Hide all "send" actions and keep only the download
+          + duplicate. The cancel button itself was already hidden via the
+          existing `status !== 'cancelled'` guard.
+        */}
+        {!isCancelled && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => setEmailDialog(true)}>
+              <Mail className="h-4 w-4" />
+              שלח במייל
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareWhatsApp}>
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareBitRequest}>
+              <Smartphone className="h-4 w-4" />
+              בקשת ביט
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareBankTransferRequest}>
+              <Landmark className="h-4 w-4" />
+              בקשת העברה
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setSmsDialog(true)}>
+              <Phone className="h-4 w-4" />
+              SMS
+            </Button>
+          </>
+        )}
         <Button
           variant="default"
           size="sm"
@@ -279,7 +291,7 @@ export function DocumentActions({
           <Copy className="h-4 w-4" />
           שכפל קבלה
         </Button>
-        {status !== 'cancelled' && (
+        {!isCancelled && (
           <Button
             variant="destructive"
             size="sm"

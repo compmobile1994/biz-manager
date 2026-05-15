@@ -102,7 +102,22 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'שגיאה', description: e.message ?? 'משהו השתבש' });
+      // Translate the most common Supabase auth errors into Hebrew so the
+      // user sees a real message instead of "Invalid login credentials".
+      const raw = (e?.message ?? '').toLowerCase();
+      let msg = e?.message ?? 'משהו השתבש';
+      if (raw.includes('invalid login') || raw.includes('invalid credentials')) {
+        msg = 'אימייל או סיסמה שגויים';
+      } else if (raw.includes('email not confirmed')) {
+        msg = 'יש לאמת את האימייל לפני התחברות';
+      } else if (raw.includes('user already registered')) {
+        msg = 'משתמש עם אימייל זה כבר קיים';
+      } else if (raw.includes('signups not allowed') || raw.includes('signup is disabled')) {
+        msg = 'הרשמה חדשה אינה אפשרית';
+      } else if (raw.includes('network') || raw.includes('fetch')) {
+        msg = 'אין חיבור לאינטרנט';
+      }
+      toast({ variant: 'destructive', title: 'שגיאה', description: msg });
     } finally {
       setLoading(false);
     }

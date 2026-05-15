@@ -14,7 +14,9 @@ const ToastViewport = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Viewport
     ref={ref}
-    className={cn('fixed bottom-0 left-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:left-auto sm:right-0 sm:top-0 sm:flex-col md:max-w-[420px]', className)}
+    // RTL: stick to the start edge (right side in Hebrew) on mobile so toasts
+    // don't appear on the physical left where the user's thumb isn't.
+    className={cn('fixed bottom-0 right-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:right-0 sm:top-0 sm:flex-col md:max-w-[420px]', className)}
     {...props}
   />
 ));
