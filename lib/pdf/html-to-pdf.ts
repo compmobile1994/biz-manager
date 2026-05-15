@@ -75,6 +75,7 @@ function readLocalFontAsDataUrl(filename: string): string | null {
 
 interface GenerateArgs {
   doc: any;
+  copy?: 'original' | 'copy';
   lines: {
     description: string;
     quantity: number;
@@ -102,7 +103,7 @@ interface GenerateArgs {
   settings: any;
 }
 
-export async function generateDocumentPdf({ doc, lines, payment, settings }: GenerateArgs): Promise<Uint8Array> {
+export async function generateDocumentPdf({ doc, lines, payment, settings, copy }: GenerateArgs): Promise<Uint8Array> {
   // Fetch logo + signature as data URLs so the page can include them inline
   // (avoids any auth / network dependency during the puppeteer render).
   const [logoDataUrl, signatureDataUrl] = await Promise.all([
@@ -119,7 +120,7 @@ export async function generateDocumentPdf({ doc, lines, payment, settings }: Gen
   `;
 
   const html = buildReceiptHtml({
-    doc, lines, payment, settings,
+    doc, lines, payment, settings, copy,
     logoDataUrl, signatureDataUrl,
   }).replace('</style>', `${fontStyles}</style>`);
 

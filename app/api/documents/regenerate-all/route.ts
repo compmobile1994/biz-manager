@@ -61,6 +61,7 @@ export async function POST() {
 
       const pdfBytes = await generateDocumentPdf({
         doc,
+        copy: 'copy', // re-render of an already-issued receipt → "העתק"
         lines: (items ?? []).map((it: any) => ({
           description: it.description,
           quantity: Number(it.quantity),

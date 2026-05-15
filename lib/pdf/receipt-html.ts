@@ -5,6 +5,7 @@ import { documentTypeLabel, paymentMethodLabel, formatCurrency, formatDate } fro
 
 interface BuildArgs {
   doc: any;
+  copy?: 'original' | 'copy';
   lines: {
     description: string;
     quantity: number;
@@ -50,7 +51,7 @@ function safeHex(c: string | null | undefined, fallback = '#2563eb'): string {
   return /^#?[0-9a-fA-F]{6}$/.test(m.replace(/^#/, '')) ? (m.startsWith('#') ? m : `#${m}`) : fallback;
 }
 
-export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, signatureDataUrl }: BuildArgs): string {
+export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, signatureDataUrl, copy = 'original' }: BuildArgs): string {
   const brand = safeHex(settings?.brand_color);
   const docLabel = documentTypeLabel[doc.document_type] ?? 'מסמך';
   const dateStr = formatDate(doc.issue_date);
@@ -288,7 +289,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
   <div class="band">
     <div class="date">${dateStr}</div>
     <div class="number">${escapeHtml(docLabel)} מספר ${doc.number ?? '___'}</div>
-    <div class="copy">מקור</div>
+    <div class="copy">${copy === 'copy' ? 'העתק' : 'מקור'}</div>
   </div>
 
   <div class="customer">

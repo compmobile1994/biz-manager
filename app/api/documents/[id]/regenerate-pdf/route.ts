@@ -61,6 +61,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const pdfBytes = await generateDocumentPdf({
       doc,
+      // This route always re-renders an already-issued receipt → label as "העתק"
+      // so the customer-facing copy is visibly distinguishable from the
+      // original they may already have.
+      copy: 'copy',
       lines: (items ?? []).map((it: any) => ({
         description: it.description,
         quantity: Number(it.quantity),

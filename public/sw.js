@@ -3,10 +3,23 @@
 // so every production deploy ships a different sw.js and the browser auto-
 // installs the new version on next page load.
 const CACHE_NAME = 'biz-manager-v1';
-const STATIC_ASSETS = ['/manifest.json', '/icons/icon.svg'];
+const STATIC_ASSETS = [
+  '/',                              // app shell — needed for offline fallback
+  '/manifest.json',
+  '/icons/icon.svg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-512-maskable.png',
+];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      // addAll fails atomically if any asset 404s; do them individually so
+      // a single missing icon doesn't break the whole install.
+      Promise.all(STATIC_ASSETS.map((url) => cache.add(url).catch(() => null))),
+    ),
+  );
   self.skipWaiting();
 });
 
