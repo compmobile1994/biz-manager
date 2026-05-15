@@ -24,10 +24,42 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
 
   if (!doc) notFound();
 
-  // Signed URL for the PDF
+  // We fetch the business settings early so we can build a friendly download
+  // filename for the PDF — "קבלה-169-מיכאל-הנסב-קומפ-מובייל.pdf" — so the
+  // customer who downloads it can hand a recognizable file to their accountant.
+  const { data: settingsForName } = await supabase
+    .from('business_settings')
+    .select('business_name')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  function safeName(s: string | null | undefined): string {
+    return (s ?? '')
+      .trim()
+      // Strip filesystem-unsafe chars and collapse whitespace to single dashes
+      .replace(/[\\/:*?"<>|]/g, '')
+      .replace(/\s+/g, '-')
+      .slice(0, 60);
+  }
+
+  const docLabel = documentTypeLabel[doc.document_type] ?? 'מסמך';
+  const downloadFilename = [
+    safeName(docLabel),
+    String(doc.number),
+    safeName(doc.customer_name_snapshot),
+    safeName(settingsForName?.business_name),
+  ]
+    .filter(Boolean)
+    .join('-') + '.pdf';
+
+  // Signed URL for the PDF — pass `download: <filename>` so Supabase adds
+  // Content-Disposition: attachment with our nice filename. The browser will
+  // save the file under that name instead of the storage UUID.
   let pdfUrl: string | null = null;
   if (doc.pdf_url) {
-    const { data: signed } = await supabase.storage.from('documents').createSignedUrl(doc.pdf_url, 60 * 60);
+    const { data: signed } = await supabase.storage.from('documents').createSignedUrl(doc.pdf_url, 60 * 60, {
+      download: downloadFilename,
+    });
     pdfUrl = signed?.signedUrl ?? null;
   }
 
