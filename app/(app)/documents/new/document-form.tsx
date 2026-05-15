@@ -627,15 +627,17 @@ function LineRow({
   const itemsListId = `items-list-${idx}`;
 
   // When user picks/types a description that matches a known item, auto-fill the price.
+  // IMPORTANT: only include `unit_price` in the patch when we actually want to
+  // override it. Sending `unit_price: line.unit_price` from a stale closure
+  // (the autocomplete event can fire before React commits a prior price-
+  // input change) silently reverts the user's just-typed price.
   function handleDescriptionChange(newDesc: string) {
+    const patch: Partial<Line> = { description: newDesc };
     const match = recentItems.find((it) => it.description === newDesc);
-    if (match) {
-      // Pre-fill price only if user hasn't manually set one (or the price was 0)
-      const shouldOverride = !line.unit_price || line.unit_price === 0;
-      onChange({ description: newDesc, unit_price: shouldOverride ? match.unit_price : line.unit_price });
-    } else {
-      onChange({ description: newDesc });
+    if (match && (!line.unit_price || line.unit_price === 0)) {
+      patch.unit_price = match.unit_price;
     }
+    onChange(patch);
   }
   const lineTotal = Number(line.quantity || 0) * Number(line.unit_price || 0);
   return (

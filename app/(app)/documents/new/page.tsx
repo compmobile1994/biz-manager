@@ -2,6 +2,12 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { DocumentForm } from './document-form';
 
+// Always re-fetch the counter on every visit so the "expected next number"
+// shown on the form is up-to-date right after issuing a previous receipt
+// (instead of showing a stale cached value from before the issue).
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function NewDocumentPage({
   searchParams,
 }: {
