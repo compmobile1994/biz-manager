@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { newDocumentSchema } from '@/lib/validation';
 import { generateDocumentPdf } from '@/lib/pdf/html-to-pdf';
@@ -143,6 +144,14 @@ export async function POST(request: Request) {
     // לא נכשל את ההזמנה - אפשר להפיק PDF מאוחר יותר
     console.error('PDF generation failed', e);
   }
+
+  // Invalidate any cached server-rendered pages that depend on the document
+  // counter / list — so the next visit to "מסמך חדש" or "מסמכים" shows the
+  // new running number / new row immediately, without waiting for a stale
+  // route cache to expire.
+  revalidatePath('/documents');
+  revalidatePath('/documents/new');
+  revalidatePath('/');
 
   return NextResponse.json({ id: doc.id, number });
 }

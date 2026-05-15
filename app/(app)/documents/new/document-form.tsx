@@ -303,6 +303,10 @@ export function DocumentForm({
           // Best-effort: if it fails, the user can still delete the draft manually
         }
       }
+      // Drop the local router cache so the next visit to /documents/new
+      // (e.g. via the sidebar "מסמך חדש" link) re-fetches the counter and
+      // shows the *next* running number instead of the one we just used.
+      router.refresh();
       // Pass through ?action=whatsapp so the detail page auto-triggers WhatsApp share once the PDF is ready
       const suffix = opts.thenWhatsApp ? '?action=whatsapp' : '';
       router.push(`/documents/${json.id}${suffix}`);
