@@ -168,8 +168,13 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
     `
     : '';
 
-  const infoRows: { label: string; value: string }[] = [];
-  if (settings?.tax_id) infoRows.push({ label: 'עוסק פטור', value: settings.tax_id });
+  // Israeli law requires "עוסק פטור" + tax_id on every receipt issued by a
+  // sole proprietor (עוסק פטור). Render the row even when settings are
+  // partial — fall back to a placeholder so the legal label is never hidden.
+  const infoRows: { label: string; value: string }[] = [
+    { label: 'עוסק פטור', value: settings?.tax_id || '—' },
+  ];
+  if (settings?.owner_name) infoRows.push({ label: 'בעלים', value: settings.owner_name });
   if (settings?.address || settings?.city) {
     infoRows.push({ label: 'כתובת', value: [settings?.address, settings?.city].filter(Boolean).join(' ') });
   }
@@ -204,6 +209,39 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
     color: #334155;
     letter-spacing: 0.5px;
   }
+  /* Diagonal "מבוטל" watermark — only shown when doc.status === 'cancelled'.
+     Sits behind the content but stays visible (printed too thanks to
+     -webkit-print-color-adjust on body). */
+  .cancelled-watermark {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+  .cancelled-watermark span {
+    font-size: 120pt;
+    font-weight: 900;
+    color: rgba(220, 38, 38, 0.18);
+    border: 8px solid rgba(220, 38, 38, 0.18);
+    padding: 8px 40px;
+    border-radius: 12px;
+    transform: rotate(-25deg);
+    letter-spacing: 8px;
+  }
+  .cancelled-banner {
+    margin: -8px 0 12px;
+    padding: 8px 12px;
+    text-align: center;
+    background: #fee2e2;
+    border: 1px solid #dc2626;
+    color: #991b1b;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 11pt;
+  }
   .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-top: 14px; }
   .business-info h1 { margin: 0 0 8px; font-size: 22pt; font-weight: 700; }
   .business-info p { margin: 2px 0; font-size: 10pt; }
@@ -233,6 +271,10 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
 </head>
 <body>
   <div class="bsd">בס&quot;ד</div>
+  ${doc.status === 'cancelled' ? `
+    <div class="cancelled-watermark"><span>מבוטל</span></div>
+    <div class="cancelled-banner">⚠️ קבלה זו בוטלה — אינה חיוב חוקי</div>
+  ` : ''}
   <div class="header">
     <div class="business-info">
       <h1>${escapeHtml(settings?.business_name ?? 'העסק שלי')}</h1>

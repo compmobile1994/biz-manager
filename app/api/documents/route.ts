@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { newDocumentSchema } from '@/lib/validation';
 import { generateDocumentPdf } from '@/lib/pdf/html-to-pdf';
 
@@ -53,10 +54,26 @@ export async function POST(request: Request) {
 
   // Helper: roll back the orphaned `documents` row on any later failure so we
   // don't leave half-written receipts that look "issued" but have no items
-  // or payment behind them. Without this, the running-number sequence
-  // burns a number on every failed attempt and the doc appears empty.
+  // or payment behind them. Also decrement the running-number counter so we
+  // don't burn a number on a failed attempt (Israeli עוסק פטור law forbids
+  // gaps in the receipt sequence). Uses the service-role client to bypass
+  // RLS — user sessions can no longer DELETE documents directly (0011).
+  const admin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+  const userId = user.id; // capture so the closure has a non-null type
   async function rollback() {
-    await supabase.from('documents').delete().eq('id', doc.id);
+    await admin.from('documents').delete().eq('id', doc.id);
+    // Optimistically roll the counter back only if it still matches the number
+    // we burned. If another receipt was already issued after us, leave it
+    // alone (the new number is the authoritative latest).
+    await admin
+      .from('document_counters')
+      .update({ last_number: number - 1 })
+      .eq('user_id', userId)
+      .eq('document_type', data.document_type)
+      .eq('last_number', number);
   }
 
   // 3) שורות

@@ -44,6 +44,11 @@ export async function POST(request: Request) {
 
   const { document_id, to } = await request.json();
   if (!document_id || !to) return NextResponse.json({ error: 'missing document_id or to' }, { status: 400 });
+  // Validate the recipient address — without this, an attacker (or a buggy
+  // client) could exfiltrate the PDF to any arbitrary mailbox.
+  if (typeof to !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) || to.length > 254) {
+    return NextResponse.json({ error: 'כתובת מייל לא תקינה' }, { status: 400 });
+  }
 
   const { data: doc } = await supabase.from('documents').select('*').eq('id', document_id).single();
   if (!doc) return NextResponse.json({ error: 'not found' }, { status: 404 });

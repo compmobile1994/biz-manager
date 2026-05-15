@@ -60,6 +60,9 @@ export async function POST(request: Request) {
 
   const { document_id, to } = await request.json();
   if (!document_id || !to) return NextResponse.json({ error: 'missing' }, { status: 400 });
+  if (typeof to !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) || to.length > 254) {
+    return NextResponse.json({ error: 'כתובת מייל לא תקינה' }, { status: 400 });
+  }
 
   const { data: doc } = await supabase.from('documents').select('*').eq('id', document_id).single();
   if (!doc) return NextResponse.json({ error: 'not found' }, { status: 404 });
