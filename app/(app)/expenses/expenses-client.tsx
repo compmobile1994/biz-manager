@@ -355,8 +355,12 @@ export function ExpensesClient({
                     step="1"
                     min="0"
                     inputMode="numeric"
-                    value={editing.amount ?? 0}
-                    onChange={(e) => setEditing({ ...editing, amount: Math.round(Number(e.target.value)) })}
+                    placeholder="0"
+                    value={editing.amount || ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEditing({ ...editing, amount: v === '' ? 0 : Math.round(Number(v)) });
+                    }}
                   />
                 </div>
               </div>

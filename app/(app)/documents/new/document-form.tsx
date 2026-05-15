@@ -704,6 +704,7 @@ function LineRow({
             type="number"
             step="1"
             min="0"
+            placeholder="1"
             value={line.quantity || ''}
             onChange={(e) => {
               const v = e.target.value;
@@ -718,6 +719,7 @@ function LineRow({
             step="1"
             min="0"
             inputMode="numeric"
+            placeholder="0"
             value={line.unit_price || ''}
             onChange={(e) => {
               const v = e.target.value;

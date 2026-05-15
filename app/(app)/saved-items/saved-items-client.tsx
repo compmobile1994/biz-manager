@@ -119,8 +119,12 @@ export function SavedItemsClient({ initial }: { initial: SavedItem[] }) {
                   step="1"
                   min="0"
                   inputMode="numeric"
-                  value={editing.default_price ?? 0}
-                  onChange={(e) => setEditing({ ...editing, default_price: Math.round(Number(e.target.value)) })}
+                  placeholder="0"
+                  value={editing.default_price || ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEditing({ ...editing, default_price: v === '' ? 0 : Math.round(Number(v)) });
+                  }}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
