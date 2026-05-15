@@ -504,7 +504,7 @@ export function DocumentForm({
           ))}
           <div className="border-t pt-3 flex justify-between items-center">
             <span className="text-lg font-semibold">סה״כ:</span>
-            <span className="text-2xl font-bold">{formatCurrency(total)}</span>
+            <span className="text-2xl font-bold">{total > 0 ? formatCurrency(total) : '—'}</span>
           </div>
         </CardContent>
       </Card>
@@ -640,18 +640,12 @@ function LineRow({
   const phonesListId = `phones-list-${idx}`;
   const itemsListId = `items-list-${idx}`;
 
-  // When user picks/types a description that matches a known item, auto-fill the price.
-  // IMPORTANT: only include `unit_price` in the patch when we actually want to
-  // override it. Sending `unit_price: line.unit_price` from a stale closure
-  // (the autocomplete event can fire before React commits a prior price-
-  // input change) silently reverts the user's just-typed price.
+  // Plain description change — no auto-price-fill. The user has reported this
+  // surprising them more than helping, so the description input now only
+  // changes the description. Auto-fill of price still happens (explicitly)
+  // when the user picks an item from the saved-items dropdown.
   function handleDescriptionChange(newDesc: string) {
-    const patch: Partial<Line> = { description: newDesc };
-    const match = recentItems.find((it) => it.description === newDesc);
-    if (match && (!line.unit_price || line.unit_price === 0)) {
-      patch.unit_price = match.unit_price;
-    }
-    onChange(patch);
+    onChange({ description: newDesc });
   }
   const lineTotal = Number(line.quantity || 0) * Number(line.unit_price || 0);
   return (
@@ -779,7 +773,7 @@ function LineRow({
           />
         </div>
         <div className="md:col-span-3 flex items-end justify-end">
-          <span className="text-sm font-semibold">סה״כ שורה: {formatCurrency(lineTotal)}</span>
+          <span className="text-sm font-semibold">סה״כ שורה: {lineTotal > 0 ? formatCurrency(lineTotal) : '—'}</span>
         </div>
 
         {/* Device-only fields: ספק האחריות + סוג היבוא */}
