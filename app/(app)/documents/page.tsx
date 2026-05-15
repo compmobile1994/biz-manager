@@ -13,7 +13,9 @@ export default async function DocumentsPage() {
   const [{ data: docs }, { data: drafts }] = await Promise.all([
     supabase
       .from('documents')
-      .select('*')
+      // Only the columns the list-view actually renders. Avoids sending
+      // pdf_url / notes / snapshots over the wire on every visit.
+      .select('id, document_type, number, customer_name_snapshot, issue_date, total, status')
       .order('issue_date', { ascending: false })
       .order('number', { ascending: false }),
     supabase
