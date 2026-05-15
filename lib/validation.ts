@@ -2,22 +2,37 @@ import { z } from 'zod';
 
 export const lineSchema = z.object({
   saved_item_id: z.string().uuid().nullable().optional(),
-  description: z.string().min(1, 'תיאור חובה'),
-  quantity: z.number().positive('כמות חיובית'),
-  unit_price: z.number().min(0),
-  line_total: z.number().min(0),
+  description: z.string().min(1, 'תיאור חובה').max(500, 'תיאור ארוך מדי'),
+  // Integer-only quantity/price/total (the receipts render whole shekels).
+  // Server-side enforcement so a hand-crafted request can't bypass the UI rounding.
+  quantity: z.number().int().positive('כמות חיובית שלמה'),
+  unit_price: z.number().int().min(0, 'מחיר לא יכול להיות שלילי'),
+  line_total: z.number().int().min(0),
   sort_order: z.number().int().nonnegative(),
-  phone_number: z.string().nullable().optional(),
-  imei: z.string().nullable().optional(),
-  warranty_months: z.number().int().nullable().optional(),
-  warranty_provider: z.string().nullable().optional(),
+  phone_number: z.string().max(30).nullable().optional(),
+  // IMEI is 14-17 digits per the GSMA spec (most are 15). Reject anything else
+  // so a malformed barcode read doesn't poison the receipt PDF.
+  imei: z
+    .string()
+    .regex(/^\d{14,17}$/, 'IMEI חייב להיות 14-17 ספרות')
+    .nullable()
+    .optional()
+    .or(z.literal('').transform(() => null)),
+  warranty_months: z.number().int().min(0).max(120).nullable().optional(),
+  warranty_provider: z.string().max(120).nullable().optional(),
   importer_type: z.enum(['official', 'parallel']).nullable().optional(),
 });
 
 export const paymentSchema = z.object({
   method: z.enum(['cash', 'credit_card', 'bank_transfer', 'bit', 'check', 'other']),
-  amount: z.number().min(0),
-  card_last4: z.string().max(4).nullable().optional(),
+  amount: z.number().int().min(0, 'סכום לא יכול להיות שלילי'),
+  card_last4: z
+    .string()
+    .regex(/^\d{4}$/, '4 ספרות בדיוק')
+    .max(4)
+    .nullable()
+    .optional()
+    .or(z.literal('').transform(() => null)),
   card_holder: z.string().nullable().optional(),
   auth_code: z.string().nullable().optional(),
   check_number: z.string().nullable().optional(),

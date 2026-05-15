@@ -207,11 +207,18 @@ export function DocumentForm({
     }
     const it = savedItems.find((s) => s.id === savedItemId);
     if (!it) return;
-    updateLine(idx, {
+    // Only override the unit_price if the user hasn't already typed one.
+    // Same defensive pattern as handleDescriptionChange — picking from a
+    // template shouldn't silently revert a manual price.
+    const currentLine = lines[idx];
+    const patch: Partial<Line> = {
       saved_item_id: it.id,
       description: it.description ? `${it.name} - ${it.description}` : it.name,
-      unit_price: Number(it.default_price),
-    });
+    };
+    if (!currentLine.unit_price || currentLine.unit_price === 0) {
+      patch.unit_price = Math.round(Number(it.default_price));
+    }
+    updateLine(idx, patch);
   }
 
   function addLine() {
@@ -697,8 +704,11 @@ function LineRow({
             type="number"
             step="1"
             min="0"
-            value={line.quantity}
-            onChange={(e) => onChange({ quantity: Math.round(Number(e.target.value)) })}
+            value={line.quantity || ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange({ quantity: v === '' ? 0 : Math.round(Number(v)) });
+            }}
           />
         </div>
         <div className="md:col-span-4 space-y-1">
@@ -708,8 +718,11 @@ function LineRow({
             step="1"
             min="0"
             inputMode="numeric"
-            value={line.unit_price}
-            onChange={(e) => onChange({ unit_price: Math.round(Number(e.target.value)) })}
+            value={line.unit_price || ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange({ unit_price: v === '' ? 0 : Math.round(Number(v)) });
+            }}
           />
         </div>
         <div className="md:col-span-5 space-y-1">

@@ -17,27 +17,35 @@ export function SavedItemsClient({ initial }: { initial: SavedItem[] }) {
   const { toast } = useToast();
   const [list, setList] = useState<SavedItem[]>(initial);
   const [editing, setEditing] = useState<Partial<SavedItem> | null>(null);
+  const [saving, setSaving] = useState(false);
 
   function startNew() {
     setEditing({ name: '', description: '', default_price: 0, is_active: true });
   }
 
   async function save() {
+    if (saving) return;
     if (!editing?.name?.trim()) return toast({ variant: 'destructive', title: 'שם הפריט חובה' });
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const payload = { ...editing, user_id: user.id, default_price: Number(editing.default_price) || 0 } as any;
-    if (editing.id) {
-      const { data, error } = await supabase.from('saved_items').update(payload).eq('id', editing.id).select().single();
-      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-      setList((l) => l.map((x) => (x.id === data.id ? (data as SavedItem) : x)));
-    } else {
-      const { data, error } = await supabase.from('saved_items').insert(payload).select().single();
-      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-      setList((l) => [...l, data as SavedItem].sort((a, b) => a.name.localeCompare(b.name, 'he')));
+    const price = Math.max(0, Math.round(Number(editing.default_price) || 0));
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const payload = { ...editing, user_id: user.id, default_price: price } as any;
+      if (editing.id) {
+        const { data, error } = await supabase.from('saved_items').update(payload).eq('id', editing.id).select().single();
+        if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
+        setList((l) => l.map((x) => (x.id === data.id ? (data as SavedItem) : x)));
+      } else {
+        const { data, error } = await supabase.from('saved_items').insert(payload).select().single();
+        if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
+        setList((l) => [...l, data as SavedItem].sort((a, b) => a.name.localeCompare(b.name, 'he')));
+      }
+      setEditing(null);
+      toast({ title: 'נשמר' });
+    } finally {
+      setSaving(false);
     }
-    setEditing(null);
-    toast({ title: 'נשמר' });
   }
 
   async function remove(id: string) {
@@ -106,11 +114,18 @@ export function SavedItemsClient({ initial }: { initial: SavedItem[] }) {
               </div>
               <div className="space-y-1.5">
                 <Label>מחיר ברירת מחדל</Label>
-                <Input type="number" step="0.01" value={editing.default_price ?? 0} onChange={(e) => setEditing({ ...editing, default_price: Number(e.target.value) })} />
+                <Input
+                  type="number"
+                  step="1"
+                  min="0"
+                  inputMode="numeric"
+                  value={editing.default_price ?? 0}
+                  onChange={(e) => setEditing({ ...editing, default_price: Math.round(Number(e.target.value)) })}
+                />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setEditing(null)}>ביטול</Button>
-                <Button onClick={save}>שמור</Button>
+                <Button variant="ghost" onClick={() => setEditing(null)} disabled={saving}>ביטול</Button>
+                <Button onClick={save} disabled={saving}>{saving ? 'שומר…' : 'שמור'}</Button>
               </div>
             </CardContent>
           </Card>

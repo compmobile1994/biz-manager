@@ -15,6 +15,19 @@ import { useToast } from '@/components/ui/use-toast';
 type CustomerType = 'regular' | 'occasional';
 type TypeFilter = 'all' | CustomerType;
 
+// Friendly Hebrew messages for the most common Supabase errors so the user
+// never sees raw English / Postgres jargon in a toast.
+function humanizeSupabaseError(msg: string | null | undefined): string {
+  if (!msg) return 'שגיאה לא ידועה';
+  const m = msg.toLowerCase();
+  if (m.includes('duplicate key')) return 'הרשומה כבר קיימת';
+  if (m.includes('foreign key')) return 'לא ניתן לבצע — הרשומה קשורה לרשומות אחרות';
+  if (m.includes('row-level security') || m.includes('permission denied')) return 'אין הרשאה לבצע פעולה זו';
+  if (m.includes('not found')) return 'הרשומה לא נמצאה';
+  if (m.includes('network') || m.includes('fetch')) return 'אין חיבור לאינטרנט';
+  return msg;
+}
+
 export function CustomersClient({ initial }: { initial: Customer[] }) {
   const supabase = createClient();
   const { toast } = useToast();
@@ -22,6 +35,8 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [editing, setEditing] = useState<(Partial<Customer> & { customer_type?: CustomerType }) | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const filtered = list.filter((c) => {
     const matchesSearch = [c.name, c.email, c.phone, c.tax_id]
@@ -48,34 +63,51 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
   }
 
   async function save() {
+    if (saving) return; // double-submit guard
     if (!editing?.name?.trim()) {
       toast({ variant: 'destructive', title: 'שם הלקוח חובה' });
       return;
     }
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const payload = { ...editing, user_id: user.id } as any;
-    if (editing.id) {
-      const { data, error } = await supabase.from('customers').update(payload).eq('id', editing.id).select().single();
-      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-      setList((l) => l.map((c) => (c.id === data.id ? (data as Customer) : c)));
-    } else {
-      const { data, error } = await supabase.from('customers').insert(payload).select().single();
-      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-      setList((l) => [...l, data as Customer].sort((a, b) => a.name.localeCompare(b.name, 'he')));
+    // Email format check — invalid emails will later break receipt issuing
+    if (editing.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editing.email.trim())) {
+      toast({ variant: 'destructive', title: 'כתובת מייל לא תקינה' });
+      return;
     }
-    setEditing(null);
-    toast({ title: 'נשמר' });
+    setSaving(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const payload = { ...editing, user_id: user.id } as any;
+      if (editing.id) {
+        const { data, error } = await supabase.from('customers').update(payload).eq('id', editing.id).select().single();
+        if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: humanizeSupabaseError(error.message) });
+        setList((l) => l.map((c) => (c.id === data.id ? (data as Customer) : c)));
+      } else {
+        const { data, error } = await supabase.from('customers').insert(payload).select().single();
+        if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: humanizeSupabaseError(error.message) });
+        setList((l) => [...l, data as Customer].sort((a, b) => a.name.localeCompare(b.name, 'he')));
+      }
+      setEditing(null);
+      toast({ title: 'נשמר' });
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function remove(id: string) {
+    if (removingId) return; // guard against double-tap
     if (!confirm('למחוק את הלקוח? המסמכים הקיימים יישמרו.')) return;
-    const { error } = await supabase.from('customers').delete().eq('id', id);
-    if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-    setList((l) => l.filter((c) => c.id !== id));
+    setRemovingId(id);
+    try {
+      const { error } = await supabase.from('customers').delete().eq('id', id);
+      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: humanizeSupabaseError(error.message) });
+      setList((l) => l.filter((c) => c.id !== id));
+    } finally {
+      setRemovingId(null);
+    }
   }
 
   // Counts per type
@@ -216,8 +248,8 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
                 <Textarea value={editing.notes ?? ''} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} />
               </Field>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setEditing(null)}>ביטול</Button>
-                <Button onClick={save}>שמור</Button>
+                <Button variant="ghost" onClick={() => setEditing(null)} disabled={saving}>ביטול</Button>
+                <Button onClick={save} disabled={saving}>{saving ? 'שומר…' : 'שמור'}</Button>
               </div>
             </CardContent>
           </Card>

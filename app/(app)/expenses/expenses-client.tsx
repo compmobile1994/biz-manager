@@ -35,6 +35,18 @@ export function ExpensesClient({
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [categoriesDialog, setCategoriesDialog] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  function humanizeError(msg: string | null | undefined): string {
+    if (!msg) return 'שגיאה לא ידועה';
+    const m = msg.toLowerCase();
+    if (m.includes('duplicate key')) return 'הרשומה כבר קיימת';
+    if (m.includes('foreign key')) return 'לא ניתן לבצע — קשור לרשומות אחרות';
+    if (m.includes('permission denied') || m.includes('row-level security')) return 'אין הרשאה';
+    if (m.includes('network') || m.includes('fetch')) return 'אין חיבור לאינטרנט';
+    return msg;
+  }
 
   const filtered = list.filter((e) => filterCategory === 'all' || e.category_id === filterCategory);
   const totalSum = filtered.reduce((s, e) => s + Number(e.amount), 0);
@@ -103,50 +115,72 @@ export function ExpensesClient({
   }
 
   async function save() {
+    if (saving) return; // double-submit guard
     if (!editing?.vendor?.trim()) return toast({ variant: 'destructive', title: 'שם הספק חובה' });
     if (!editing?.amount || editing.amount <= 0) return toast({ variant: 'destructive', title: 'סכום חיובי נדרש' });
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    let receipt_url: string | null = editing.receipt_url ?? null;
+    // Validate uploaded file size + type before sending it to storage
     if (editing._file) {
-      const ext = editing._file.name.split('.').pop() ?? 'jpg';
-      const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('expenses').upload(path, editing._file, { upsert: true });
-      if (upErr) return toast({ variant: 'destructive', title: 'שגיאה בהעלאת קבלה', description: upErr.message });
-      receipt_url = path;
+      const MAX = 8 * 1024 * 1024;
+      if (editing._file.size > MAX) {
+        return toast({ variant: 'destructive', title: 'הקובץ גדול מדי', description: 'מקסימום 8MB' });
+      }
+      if (!/^(image\/|application\/pdf)/.test(editing._file.type)) {
+        return toast({ variant: 'destructive', title: 'סוג קובץ לא נתמך', description: 'תמונה או PDF בלבד' });
+      }
     }
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const payload: any = {
-      user_id: user.id,
-      expense_date: editing.expense_date,
-      vendor: editing.vendor,
-      category_id: editing.category_id ?? null,
-      amount: Number(editing.amount),
-      description: editing.description ?? null,
-      payment_method: editing.payment_method ?? null,
-      reference: editing.reference ?? null,
-      receipt_url,
-    };
+      let receipt_url: string | null = editing.receipt_url ?? null;
+      if (editing._file) {
+        const ext = editing._file.name.split('.').pop() ?? 'jpg';
+        const path = `${user.id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('expenses').upload(path, editing._file, { upsert: true });
+        if (upErr) return toast({ variant: 'destructive', title: 'שגיאה בהעלאת קבלה', description: humanizeError(upErr.message) });
+        receipt_url = path;
+      }
 
-    if (editing.id) {
-      const { data, error } = await supabase.from('expenses').update(payload).eq('id', editing.id).select().single();
-      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-      setList((l) => l.map((x) => (x.id === data.id ? (data as Expense) : x)));
-    } else {
-      const { data, error } = await supabase.from('expenses').insert(payload).select().single();
-      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-      setList((l) => [data as Expense, ...l]);
+      const payload: any = {
+        user_id: user.id,
+        expense_date: editing.expense_date,
+        vendor: editing.vendor,
+        category_id: editing.category_id ?? null,
+        amount: Math.round(Number(editing.amount)), // integer shekels — matches receipts
+        description: editing.description ?? null,
+        payment_method: editing.payment_method ?? null,
+        reference: editing.reference ?? null,
+        receipt_url,
+      };
+
+      if (editing.id) {
+        const { data, error } = await supabase.from('expenses').update(payload).eq('id', editing.id).select().single();
+        if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: humanizeError(error.message) });
+        setList((l) => l.map((x) => (x.id === data.id ? (data as Expense) : x)));
+      } else {
+        const { data, error } = await supabase.from('expenses').insert(payload).select().single();
+        if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: humanizeError(error.message) });
+        setList((l) => [data as Expense, ...l]);
+      }
+      setEditing(null);
+      toast({ title: 'נשמר' });
+    } finally {
+      setSaving(false);
     }
-    setEditing(null);
-    toast({ title: 'נשמר' });
   }
 
   async function remove(id: string) {
+    if (removingId) return;
     if (!confirm('למחוק את ההוצאה?')) return;
-    const { error } = await supabase.from('expenses').delete().eq('id', id);
-    if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: error.message });
-    setList((l) => l.filter((x) => x.id !== id));
+    setRemovingId(id);
+    try {
+      const { error } = await supabase.from('expenses').delete().eq('id', id);
+      if (error) return toast({ variant: 'destructive', title: 'שגיאה', description: humanizeError(error.message) });
+      setList((l) => l.filter((x) => x.id !== id));
+    } finally {
+      setRemovingId(null);
+    }
   }
 
   return (
@@ -316,7 +350,14 @@ export function ExpensesClient({
                 </div>
                 <div className="space-y-1.5">
                   <Label>סכום (₪)</Label>
-                  <Input type="number" step="0.01" value={editing.amount ?? 0} onChange={(e) => setEditing({ ...editing, amount: Number(e.target.value) })} />
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    inputMode="numeric"
+                    value={editing.amount ?? 0}
+                    onChange={(e) => setEditing({ ...editing, amount: Math.round(Number(e.target.value)) })}
+                  />
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -412,8 +453,8 @@ export function ExpensesClient({
                 {editing.receipt_url && !editing._file && <p className="text-xs text-muted-foreground">📎 קובץ קיים</p>}
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setEditing(null)}>ביטול</Button>
-                <Button onClick={save}>שמור</Button>
+                <Button variant="ghost" onClick={() => setEditing(null)} disabled={saving}>ביטול</Button>
+                <Button onClick={save} disabled={saving}>{saving ? 'שומר…' : 'שמור'}</Button>
               </div>
             </CardContent>
           </Card>
