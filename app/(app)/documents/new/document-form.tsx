@@ -396,6 +396,15 @@ export function DocumentForm({
 
   return (
     <div className="space-y-6">
+      {/* DEBUG: shows what the server passed via prefill — verifies draft load.
+          Remove once the issue_date round-trip is confirmed in production. */}
+      {prefill && (
+        <div className="rounded-md bg-amber-50 border border-amber-300 px-3 py-2 text-xs space-y-0.5 font-mono">
+          <div>🔎 DEBUG · draftId: {currentDraftId ?? '(none)'}</div>
+          <div>🔎 prefill.issue_date: <strong>{String(prefill.issue_date ?? '(undefined)')}</strong></div>
+          <div>🔎 issueDate state: <strong>{issueDate}</strong></div>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>פרטי מסמך</CardTitle>
