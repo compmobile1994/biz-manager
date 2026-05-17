@@ -6,7 +6,7 @@ export default async function CustomersPage() {
   const { data: customers } = await supabase
     .from('customers')
     // Trim away user_id + created_at — not displayed nor edited on this page.
-    .select('id, name, email, phone, address, tax_id, notes, customer_type')
+    .select('id, name, email, phone, phone2, address, tax_id, notes, customer_type')
     .order('name', { ascending: true });
 
   return (

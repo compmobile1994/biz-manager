@@ -39,7 +39,7 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   const filtered = list.filter((c) => {
-    const matchesSearch = [c.name, c.email, c.phone, c.tax_id]
+    const matchesSearch = [c.name, c.email, c.phone, (c as any).phone2, c.tax_id]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()
@@ -187,6 +187,7 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
                     {c.tax_id && <p className="text-xs text-muted-foreground">ת״ז/ח.פ.: {c.tax_id}</p>}
                     {c.email && <p className="text-xs flex items-center gap-1"><Mail className="h-3 w-3" />{c.email}</p>}
                     {c.phone && <p className="text-xs flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</p>}
+                    {(c as any).phone2 && <p className="text-xs flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{(c as any).phone2}</p>}
                   </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => setEditing({ ...(c as any), customer_type: cType })}>
@@ -220,10 +221,25 @@ export function CustomersClient({ initial }: { initial: Customer[] }) {
                 <Field label="ת״ז / ח.פ.">
                   <Input value={editing.tax_id ?? ''} onChange={(e) => setEditing({ ...editing, tax_id: e.target.value })} />
                 </Field>
-                <Field label="טלפון">
-                  <Input value={editing.phone ?? ''} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
+                <Field label="טלפון ראשי">
+                  <Input
+                    type="tel"
+                    inputMode="tel"
+                    value={editing.phone ?? ''}
+                    onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
+                    placeholder="נייד אישי"
+                  />
                 </Field>
               </div>
+              <Field label="טלפון נוסף (אופציונלי)">
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  value={(editing as any).phone2 ?? ''}
+                  onChange={(e) => setEditing({ ...editing, phone2: e.target.value } as any)}
+                  placeholder="משרד / נוסף"
+                />
+              </Field>
               <Field label="דוא״ל">
                 <Input type="email" value={editing.email ?? ''} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
               </Field>

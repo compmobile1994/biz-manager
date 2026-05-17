@@ -30,6 +30,7 @@ export interface Customer {
   name: string;
   email: string | null;
   phone: string | null;
+  phone2: string | null;
   address: string | null;
   tax_id: string | null;
   notes: string | null;
