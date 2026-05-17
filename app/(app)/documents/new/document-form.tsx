@@ -108,6 +108,13 @@ export function DocumentForm({
   // Restore the date saved into the draft (if any). For "duplicate" flow we
   // intentionally want today, so the duplicate prefill doesn't set issue_date.
   const [issueDate, setIssueDate] = useState(prefill?.issue_date || new Date().toISOString().slice(0, 10));
+  // Defensive: if the form is mounted with a stale initial state for any
+  // reason (Next.js client cache, fast-refresh, etc.) and a draft date
+  // arrives, sync the input to it. Runs once per change of prefill?.issue_date.
+  useEffect(() => {
+    if (prefill?.issue_date) setIssueDate(prefill.issue_date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.issue_date]);
   const [customerId, setCustomerId] = useState<string>(prefill?.customer_id ?? '');
   const [customerName, setCustomerName] = useState(prefill?.customer_name ?? '');
   const [customerTaxId, setCustomerTaxId] = useState(prefill?.customer_tax_id ?? '');
