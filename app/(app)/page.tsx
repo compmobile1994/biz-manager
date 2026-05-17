@@ -1,21 +1,12 @@
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatDate, documentTypeLabel } from '@/lib/utils';
 import { ArrowLeft, FileText, Receipt, TrendingUp, Users, Wallet } from 'lucide-react';
-
-// Lazy-load the chart so Recharts (~90KB gzipped) doesn't block the initial
-// dashboard render. The numeric stats render instantly; the chart streams
-// in below the fold.
-const DashboardChart = dynamic(
-  () => import('./dashboard-chart').then((m) => m.DashboardChart),
-  {
-    ssr: false,
-    loading: () => <div className="h-72 w-full animate-pulse bg-muted/40 rounded-md" />,
-  },
-);
+// Lazy-loaded chart wrapper — kept as a separate Client Component because
+// Next.js 15 forbids next/dynamic with ssr:false inside Server Components.
+import { DashboardChartLazy } from './dashboard-chart-lazy';
 
 async function getStats() {
   const supabase = await createClient();
@@ -163,7 +154,7 @@ export default async function DashboardPage() {
           <CardTitle>הכנסות והוצאות 12 חודשים אחרונים</CardTitle>
         </CardHeader>
         <CardContent>
-          <DashboardChart data={stats.months} />
+          <DashboardChartLazy data={stats.months} />
         </CardContent>
       </Card>
 
