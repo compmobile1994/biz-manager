@@ -105,13 +105,17 @@ export function DocumentForm({
   const [step, setStep] = useState<'edit' | 'preview'>('edit');
 
   const [docType, setDocType] = useState<DocumentType>(prefill?.document_type ?? 'receipt');
-  // Restore the date saved into the draft (if any). For "duplicate" flow we
-  // intentionally want today, so the duplicate prefill doesn't set issue_date.
-  // NOTE: the previous "defensive useEffect" that synced from prefill was
-  // ITSELF the bug — every parent re-render reset the user's typed date back
-  // to the draft's stored date. The useState initializer alone is correct
-  // because page.tsx remounts the form on every navigation.
   const [issueDate, setIssueDate] = useState(prefill?.issue_date || new Date().toISOString().slice(0, 10));
+
+  // Belt-and-suspenders: on EVERY first mount of the form, force-sync from
+  // prefill once. Combined with the key={params.draft} prop on the page,
+  // this guarantees: every navigation to a draft → fresh mount → this
+  // effect runs once → state matches prefill. User edits afterwards work
+  // normally (this effect never runs again on the same mount).
+  useEffect(() => {
+    if (prefill?.issue_date) setIssueDate(prefill.issue_date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // empty deps = run once on mount only, never again
   const [customerId, setCustomerId] = useState<string>(prefill?.customer_id ?? '');
   const [customerName, setCustomerName] = useState(prefill?.customer_name ?? '');
   const [customerTaxId, setCustomerTaxId] = useState(prefill?.customer_tax_id ?? '');
@@ -393,6 +397,14 @@ export function DocumentForm({
 
   return (
     <div className="space-y-6">
+      {/* Visible confirmation that a draft was loaded with its saved date.
+          Disappears once the user changes the date — at that point issueDate
+          differs from the original prefill value. */}
+      {currentDraftId && prefill?.issue_date && (
+        <div className="rounded-md bg-amber-50 border border-amber-300 px-3 py-2 text-sm">
+          📋 טיוטה נטענה — תאריך השמירה: <strong>{new Date(prefill.issue_date + 'T00:00:00').toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}</strong>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>פרטי מסמך</CardTitle>
