@@ -187,7 +187,13 @@ export default async function NewDocumentPage({
             : 'הוצאת קבלה / חשבונית עסקה'}
         </p>
       </div>
+      {/* `key` forces React to fully remount the form when the user navigates
+          between draft/duplicate/blank — otherwise the soft-nav keeps the
+          previous mount's useState (initialized with today's date) and the
+          new prefill is silently ignored. The 3 distinct keys cover the
+          three entry shapes. */}
       <DocumentForm
+        key={`form-${params.draft ?? params.duplicate ?? 'new'}`}
         customers={customers ?? []}
         savedItems={items ?? []}
         nextNumbers={nextNumbers}
