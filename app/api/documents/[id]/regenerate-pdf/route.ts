@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient as createSsrClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { generateDocumentPdf } from '@/lib/pdf/html-to-pdf';
+import { isServiceRoleBearer } from '@/lib/auth-bearer';
 
 export const runtime = 'nodejs';
 
@@ -12,10 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   //   1. Normal user session (cookie-based) — interactive button click
   //   2. Service-role bearer token in Authorization header — for CLI / script
   //      one-shot recovery of failed PDFs (bypasses RLS / user login).
-  const authHeader = req.headers.get('authorization') ?? '';
-  const isServiceRole =
-    authHeader.startsWith('Bearer ') &&
-    authHeader.slice(7) === process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const isServiceRole = isServiceRoleBearer(req.headers.get('authorization'));
 
   let supabase: any;
   let userId: string;

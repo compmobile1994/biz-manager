@@ -81,12 +81,21 @@ export function DocumentActions({
     ) return;
     try {
       const supabase = createClient();
-      const { error } = await supabase.from('documents').update({ status: 'cancelled' }).eq('id', docId);
+      // Call the dedicated RPC instead of a direct UPDATE. The RPC enforces
+      // status='issued' → 'cancelled' only, so a buggy/double-tap UPDATE can
+      // never accidentally un-cancel a doc or mutate other columns.
+      const { error } = await supabase.rpc('cancel_document', { p_id: docId });
       if (error) throw error;
       toast({ title: 'הקבלה בוטלה' });
       router.refresh();
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'שגיאה', description: e.message });
+      const raw = (e?.message ?? '').toLowerCase();
+      const msg =
+        raw.includes('cannot cancel') ? 'הקבלה כבר בוטלה' :
+        raw.includes('forbidden') ? 'אין הרשאה' :
+        raw.includes('not found') ? 'הקבלה לא נמצאה' :
+        e?.message ?? 'שגיאה לא ידועה';
+      toast({ variant: 'destructive', title: 'שגיאה', description: msg });
     }
   }
 

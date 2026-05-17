@@ -152,10 +152,15 @@ export async function POST(request: Request) {
     });
 
     const path = `${user.id}/${doc.id}.pdf`;
-    await supabase.storage.from('documents').upload(path, pdfBytes, {
+    // CRITICAL: only set pdf_url if the upload actually succeeded. Earlier code
+    // ignored upload errors, leaving the DB pointing at a missing file → 404
+    // when the customer tries to download. The user can always click "צור PDF
+    // עכשיו" on the detail page to regenerate.
+    const { error: upErr } = await supabase.storage.from('documents').upload(path, pdfBytes, {
       contentType: 'application/pdf',
       upsert: true,
     });
+    if (upErr) throw upErr;
     await supabase.from('documents').update({ pdf_url: path }).eq('id', doc.id);
   } catch (e: any) {
     // לא נכשל את ההזמנה - אפשר להפיק PDF מאוחר יותר

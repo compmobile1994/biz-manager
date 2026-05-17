@@ -3,8 +3,12 @@
 // so every production deploy ships a different sw.js and the browser auto-
 // installs the new version on next page load.
 const CACHE_NAME = 'biz-manager-v1';
+// NOTE: do NOT cache '/' here. The root path redirects to /login for
+// unauthenticated users, and the SW would store the 302→/login redirect
+// as the offline shell — making the first offline visit show a blank page.
+// The HTML network-first handler below already caches navigations on the
+// fly once the user has visited them, which is the right time.
 const STATIC_ASSETS = [
-  '/',                              // app shell — needed for offline fallback
   '/manifest.json',
   '/icons/icon.svg',
   '/icons/icon-192.png',

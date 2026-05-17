@@ -8,14 +8,12 @@ import { createClient as createSsrClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { documentTypeLabel } from '@/lib/utils';
 import { buildDocumentEmailHtml } from '@/lib/email/template';
+import { isServiceRoleBearer } from '@/lib/auth-bearer';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('authorization') ?? '';
-  const isServiceRole =
-    authHeader.startsWith('Bearer ') &&
-    authHeader.slice(7) === process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const isServiceRole = isServiceRoleBearer(request.headers.get('authorization'));
 
   let supabase: any;
   let user: any;
