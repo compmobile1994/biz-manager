@@ -721,29 +721,31 @@ function LineRow({
         <div className="md:col-span-3 space-y-1">
           <Label className="text-xs">כמות</Label>
           <Input
-            type="number"
-            step="1"
-            min="0"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             placeholder="1"
             value={line.quantity || ''}
             onChange={(e) => {
-              const v = e.target.value;
-              onChange({ quantity: v === '' ? 0 : Math.round(Number(v)) });
+              // Strip everything that isn't a digit so the browser can't auto-
+              // coerce values (the old type="number" sometimes rewrote what
+              // the user typed — e.g. 120 → 118 on certain mobile Chromes).
+              const clean = e.target.value.replace(/[^0-9]/g, '');
+              onChange({ quantity: clean === '' ? 0 : parseInt(clean, 10) });
             }}
           />
         </div>
         <div className="md:col-span-4 space-y-1">
           <Label className="text-xs">מחיר יחידה (₪)</Label>
           <Input
-            type="number"
-            step="1"
-            min="0"
+            type="text"
             inputMode="numeric"
+            pattern="[0-9]*"
             placeholder="0"
             value={line.unit_price || ''}
             onChange={(e) => {
-              const v = e.target.value;
-              onChange({ unit_price: v === '' ? 0 : Math.round(Number(v)) });
+              const clean = e.target.value.replace(/[^0-9]/g, '');
+              onChange({ unit_price: clean === '' ? 0 : parseInt(clean, 10) });
             }}
           />
         </div>

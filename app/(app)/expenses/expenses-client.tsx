@@ -351,15 +351,14 @@ export function ExpensesClient({
                 <div className="space-y-1.5">
                   <Label>סכום (₪)</Label>
                   <Input
-                    type="number"
-                    step="1"
-                    min="0"
+                    type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="0"
                     value={editing.amount || ''}
                     onChange={(e) => {
-                      const v = e.target.value;
-                      setEditing({ ...editing, amount: v === '' ? 0 : Math.round(Number(v)) });
+                      const clean = e.target.value.replace(/[^0-9]/g, '');
+                      setEditing({ ...editing, amount: clean === '' ? 0 : parseInt(clean, 10) });
                     }}
                   />
                 </div>
