@@ -67,9 +67,18 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
   let customerEmail: string | null = null;
   let customerPhone: string | null = null;
   if (doc.customer_id) {
-    const { data: c } = await supabase.from('customers').select('email, phone').eq('id', doc.customer_id).maybeSingle();
+    const { data: c } = await supabase.from('customers').select('email, phone, phone2').eq('id', doc.customer_id).maybeSingle();
     customerEmail = c?.email ?? null;
-    customerPhone = c?.phone ?? null;
+    // For WhatsApp / SMS sending: prefer the mobile number (Israeli prefix 05).
+    // Some customers have a landline as the primary phone (printed on the
+    // receipt) and a personal mobile in phone2 for messaging. Pick whichever
+    // one looks like a mobile.
+    const isMobile = (p?: string | null) => !!p && /^0?5\d/.test(p.replace(/\D/g, ''));
+    const phoneAny = c?.phone ?? null;
+    const phone2Any = (c as any)?.phone2 ?? null;
+    customerPhone = isMobile(phone2Any) ? phone2Any
+                  : isMobile(phoneAny) ? phoneAny
+                  : (phoneAny ?? phone2Any ?? null);
   }
 
   return (
