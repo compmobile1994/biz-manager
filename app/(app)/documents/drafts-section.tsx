@@ -7,12 +7,16 @@ import { FileEdit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 
 interface Draft {
   id: string;
   label: string | null;
   updated_at: string;
+  data?: {
+    issue_date?: string;
+    [key: string]: any;
+  } | null;
 }
 
 export function DraftsSection({ initialDrafts }: { initialDrafts: Draft[] }) {
@@ -45,29 +49,42 @@ export function DraftsSection({ initialDrafts }: { initialDrafts: Draft[] }) {
         >
           <span className="flex items-center gap-2">
             <FileEdit className="h-4 w-4 text-amber-700" />
-            📝 טיוטות שמורות ({drafts.length})
+            טיוטות שמורות ({drafts.length})
           </span>
           {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         {open && (
           <div className="mt-3 divide-y">
-            {drafts.map((d) => (
-              <div key={d.id} className="flex items-center justify-between py-2">
-                <Link
-                  href={`/documents/new?draft=${d.id}`}
-                  className="flex-1 flex items-center gap-2 hover:text-blue-600"
-                >
-                  <FileEdit className="h-4 w-4 text-amber-700" />
-                  <div>
-                    <p className="text-sm font-medium">{d.label || 'טיוטה'}</p>
-                    <p className="text-xs text-muted-foreground">נשמר: {formatDateTime(d.updated_at)}</p>
-                  </div>
-                </Link>
-                <Button variant="ghost" size="icon" onClick={() => remove(d.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
+            {drafts.map((d) => {
+              const issueDate = d.data?.issue_date;
+              return (
+                <div key={d.id} className="flex items-center justify-between py-2">
+                  <Link
+                    href={`/documents/new?draft=${d.id}`}
+                    className="flex-1 flex items-center gap-2 hover:text-blue-600"
+                  >
+                    <FileEdit className="h-4 w-4 text-amber-700" />
+                    <div>
+                      <p className="text-sm font-medium">{d.label || 'טיוטה'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {issueDate ? (
+                          <>
+                            תאריך בקבלה: <strong>{formatDate(issueDate)}</strong>
+                            <span className="mx-2">·</span>
+                            נשמר: {formatDateTime(d.updated_at)}
+                          </>
+                        ) : (
+                          <>נשמר: {formatDateTime(d.updated_at)}</>
+                        )}
+                      </p>
+                    </div>
+                  </Link>
+                  <Button variant="ghost" size="icon" onClick={() => remove(d.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>

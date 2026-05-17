@@ -20,7 +20,9 @@ export default async function DocumentsPage() {
       .order('number', { ascending: false }),
     supabase
       .from('document_drafts')
-      .select('id, label, updated_at')
+      // Also pull `data` so the drafts list can show the receipt's actual
+      // issue_date (what the user cares about), not just when it was saved.
+      .select('id, label, updated_at, data')
       .order('updated_at', { ascending: false }),
   ]);
 
