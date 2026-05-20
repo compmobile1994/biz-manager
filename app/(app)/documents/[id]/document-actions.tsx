@@ -142,9 +142,16 @@ export function DocumentActions({
       return;
     }
 
-    // Try the modern Web Share API first — attaches the actual PDF as a file
-    // so the customer gets a clean attachment with no message text, just the
-    // receipt. Works on Android Chrome PWA and recent iOS Safari.
+    // Short, clean Hebrew message — no emojis (they render as junk
+    // characters in some WhatsApp/SMS receivers), no business name spam,
+    // no bank/Bit info (those have their own buttons).
+    const message =
+      `היי ${customerName},\n` +
+      `מצורפת ${docTitle} מספר ${documentNumber} מ-${businessName}.`;
+
+    // Try the modern Web Share API first — attaches the actual PDF as a
+    // file together with the short Hebrew note. Works on Android Chrome
+    // PWA and recent iOS Safari.
     try {
       const res = await fetch(pdfUrl);
       if (res.ok) {
@@ -153,7 +160,7 @@ export function DocumentActions({
         const file = new File([blob], filename, { type: 'application/pdf' });
         const navAny = navigator as any;
         if (navAny.canShare && navAny.canShare({ files: [file] })) {
-          await navAny.share({ files: [file], title: filename });
+          await navAny.share({ files: [file], text: message, title: filename });
           return;
         }
       }
@@ -161,10 +168,10 @@ export function DocumentActions({
       // Fall through to the wa.me link below
     }
 
-    // Fallback: open WhatsApp with just the link, no marketing text.
-    // The customer sees a clean URL they can tap to download the PDF.
+    // Fallback: open WhatsApp with the short message + PDF URL on its own
+    // line so the link is clearly tap-able.
     const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-    const msg = encodeURIComponent(pdfUrl);
+    const msg = encodeURIComponent(message + '\n' + pdfUrl);
     const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
     window.open(url, '_blank');
   }
