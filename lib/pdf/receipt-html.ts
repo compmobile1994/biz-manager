@@ -303,17 +303,10 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
 
   ${paymentBlock}
 
-  ${settings?.bank_name && settings?.bank_account ? `
-    <div style="margin-top:16px; padding:10px; border:1px dashed ${brand}66; border-radius:6px; background:${brand}0d;">
-      <p style="font-weight:700; font-size:10pt; margin:0 0 6px; color:${brand};">לתשלום בהעברה בנקאית:</p>
-      <table style="font-size:10pt; line-height:1.5;">
-        <tr><td style="color:#64748b; padding-left:8px;">בנק:</td><td>${escapeHtml(settings.bank_name)}</td></tr>
-        ${settings.bank_branch ? `<tr><td style="color:#64748b; padding-left:8px;">סניף:</td><td>${escapeHtml(settings.bank_branch)}</td></tr>` : ''}
-        <tr><td style="color:#64748b; padding-left:8px;">חשבון:</td><td>${escapeHtml(settings.bank_account)}</td></tr>
-        <tr><td style="color:#64748b; padding-left:8px;">על שם:</td><td>${escapeHtml(settings.owner_name || settings.business_name || '')}</td></tr>
-      </table>
-    </div>
-  ` : ''}
+  <!-- Bank-transfer payment details intentionally NOT shown on the receipt
+       itself. The "בקשת העברה" / "בקשת ביט" buttons on the document page
+       generate a separate WhatsApp message with the bank info — the
+       receipt PDF only documents that payment occurred, not how to pay. -->
 
   ${doc.notes ? `
     <div style="margin-top:16px; font-size:10pt;">

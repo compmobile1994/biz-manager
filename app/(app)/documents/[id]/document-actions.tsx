@@ -136,36 +136,35 @@ export function DocumentActions({
     }
   }
 
-  function shareWhatsApp() {
+  async function shareWhatsApp() {
     if (!pdfUrl) {
       toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
       return;
     }
-    const formattedAmount = new Intl.NumberFormat('he-IL', {
-      style: 'currency',
-      currency: 'ILS',
-      maximumFractionDigits: 2,
-    }).format(docTotal);
 
-    const lines = [
-      `היי ${customerName} 👋`,
-      ``,
-      `מצורפת ${docTitle} מ-${businessName} בסך ${formattedAmount}:`,
-      pdfUrl,
-    ];
-
-    if (businessPhone) {
-      lines.push('');
-      lines.push(`💳 לתשלום בביט:`);
-      lines.push(`📱 ${businessPhone}`);
-      lines.push(`👤 ${businessName}`);
+    // Try the modern Web Share API first — attaches the actual PDF as a file
+    // so the customer gets a clean attachment with no message text, just the
+    // receipt. Works on Android Chrome PWA and recent iOS Safari.
+    try {
+      const res = await fetch(pdfUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        const filename = `${docTitle.replace(/[\\/:*?"<>|]/g, '')}-${documentNumber}.pdf`;
+        const file = new File([blob], filename, { type: 'application/pdf' });
+        const navAny = navigator as any;
+        if (navAny.canShare && navAny.canShare({ files: [file] })) {
+          await navAny.share({ files: [file], title: filename });
+          return;
+        }
+      }
+    } catch {
+      // Fall through to the wa.me link below
     }
 
-    lines.push('');
-    lines.push('תודה רבה! 🙏');
-
-    const msg = encodeURIComponent(lines.join('\n'));
+    // Fallback: open WhatsApp with just the link, no marketing text.
+    // The customer sees a clean URL they can tap to download the PDF.
     const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+    const msg = encodeURIComponent(pdfUrl);
     const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
     window.open(url, '_blank');
   }
