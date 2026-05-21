@@ -295,6 +295,15 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
     <p style="margin:0;"><span style="color:#64748b;">לכבוד:</span> <span class="name">${escapeHtml(doc.customer_name_snapshot)}</span></p>
     ${doc.customer_tax_id_snapshot ? `<p class="small">ת״ז/ח.פ.: ${escapeHtml(doc.customer_tax_id_snapshot)}</p>` : ''}
     ${doc.customer_address_snapshot ? `<p class="small">${escapeHtml(doc.customer_address_snapshot)}</p>` : ''}
+    <!-- Summary line — at a glance for the customer / their accountant:
+         which receipt this is and who sent it. Receipt number is duplicated
+         from the band above intentionally — when the recipient prints or
+         clips the customer section alone, all the identifying info is
+         still here. -->
+    <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #cbd5e1; font-size:10pt;">
+      <p style="margin:1px 0;"><span style="color:#64748b;">${escapeHtml(docLabel)} מספר:</span> <strong>${doc.number ?? '___'}</strong></p>
+      <p style="margin:1px 0;"><span style="color:#64748b;">מאת:</span> <strong>${escapeHtml(settings?.business_name ?? 'העסק שלי')}</strong></p>
+    </div>
   </div>
 
   <div style="margin-top:8px;">
