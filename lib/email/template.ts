@@ -118,11 +118,8 @@ export function buildDocumentEmailHtml(opts: {
                   </tr>
                 </table>
 
-                <p style="margin:0 0 16px 0;">
+                <p style="margin:0 0 24px 0;">
                   מצורף ${esc(docLabel)} עבור <strong>${esc(doc.customer_name_snapshot)}</strong> בסכום של <strong>${esc(totalText)}</strong>.
-                </p>
-                <p style="margin:0 0 24px 0;color:#374151;">
-                  אנא בדקו את המסמך המצורף. אם יש שאלות, נשמח לעזור.
                 </p>
 
                 <p style="margin:24px 0 0 0;">
