@@ -121,10 +121,9 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
       const filename = count === 1 ? `Kabala-${singleNumber}.pdf` : `Kabalot-${count}.pdf`;
       const mergedFile = new File([mergedBlob], filename, { type: 'application/pdf' });
 
-      // User-set exact wording — 3 short lines, no customer name, no hyphen,
-      // no period.
+      // User-set exact wording — 3 short lines, with customer name on greeting.
       const message =
-        `היי\n` +
+        `היי ${customerName}\n` +
         `מצורף קבלה\n` +
         `מ${businessName}`;
 

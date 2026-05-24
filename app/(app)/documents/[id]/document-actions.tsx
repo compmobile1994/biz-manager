@@ -168,10 +168,9 @@ export function DocumentActions({
     }
     setSharingWhatsapp(true);
 
-    // User-set exact wording — 3 short lines, no customer name, no hyphen,
-    // no period.
+    // User-set exact wording — 3 short lines, with customer name on greeting.
     const message =
-      `היי\n` +
+      `היי ${customerName}\n` +
       `מצורף קבלה\n` +
       `מ${businessName}`;
 
