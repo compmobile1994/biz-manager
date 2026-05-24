@@ -83,11 +83,11 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return;
       }
       const mergedBlob = await mergeRes.blob();
-      // Hebrew filename: "קבלה מספר 185.pdf" for single, "קבלות.pdf" for many.
+      // ASCII filename — Hebrew filenames cause Android Chrome's canShare()
+      // to return false (silently!), which would drop us into the wa.me +
+      // URL fallback. ASCII keeps the file going as a real attachment.
       const singleNumber = docs.find((d) => d.id === ids[0])?.number;
-      const filename = count === 1
-        ? `קבלה מספר ${singleNumber}.pdf`
-        : `קבלות.pdf`;
+      const filename = count === 1 ? `Kabala-${singleNumber}.pdf` : `Kabalot-${count}.pdf`;
       const mergedFile = new File([mergedBlob], filename, { type: 'application/pdf' });
 
       const message =

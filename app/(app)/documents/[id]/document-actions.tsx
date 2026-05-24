@@ -156,9 +156,11 @@ export function DocumentActions({
     setSharingWhatsapp(true);
 
     // Clean Hebrew message — no URL. The PDF goes in as a real attached
-    // file via the Web Share API. Filename in Hebrew per user request
-    // ("קבלה מספר 185.pdf"). If a recipient sees junk we can revert to
-    // ASCII per platform.
+    // file via the Web Share API. Filename is intentionally ASCII —
+    // Hebrew filenames cause Android Chrome's canShare() to return false
+    // silently, which drops us into the wa.me + URL fallback. The PDF
+    // itself still has "קבלה מספר 185" in its band, so the receipt is
+    // clearly identified once opened.
     const message =
       `היי ${customerName},\n` +
       `מצורפת ${docTitle}\n` +
@@ -174,10 +176,15 @@ export function DocumentActions({
         const res = await fetch(sourceUrl);
         if (res.ok) {
           const blob = await res.blob();
-          // Hebrew filename "קבלה מספר 185.pdf" — user explicitly asked
-          // for the doc type + "מספר" + number wording.
-          const docLabel = documentTypeLabel[docType] ?? 'מסמך';
-          const filename = `${docLabel} מספר ${documentNumber}.pdf`;
+          // ASCII filename — Hebrew filenames cause Android Chrome's
+          // canShare() to return false (silently!), which would drop us
+          // into the wa.me + URL fallback. ASCII keeps the file going as
+          // a real attachment so the message stays clean.
+          const asciiType =
+            docType === 'invoice' ? 'Invoice' :
+            docType === 'invoice_receipt' ? 'Invoice-Receipt' :
+            docType === 'credit' ? 'Credit' : 'Kabala';
+          const filename = `${asciiType}-${documentNumber}.pdf`;
           const file = new File([blob], filename, { type: 'application/pdf' });
           const navAny = navigator as any;
           if (navAny.canShare && navAny.canShare({ files: [file] })) {
