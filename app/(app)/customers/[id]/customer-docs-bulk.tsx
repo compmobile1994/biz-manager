@@ -62,37 +62,54 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
     }
     setSending(true);
     try {
-      // Per-document: first send ships the canonical "מקור"; subsequent
-      // sends ship a freshly-generated "נאמן למקור". After share success
-      // we mark sent_at for any docs that were never sent before.
-      const files: File[] = [];
-      const urls: string[] = [];
-      const firstSendIds: string[] = [];
-      for (const id of selected) {
+      // Fetch every selected PDF in parallel — sequential was timing out
+      // when the user picked 3+ receipts, since each PDF download takes
+      // 1-3s in serverless environments. Parallel + Promise.allSettled
+      // gives us a single ~3s wait regardless of count.
+      const fetchOne = async (id: string) => {
         const doc = docs.find((d) => d.id === id);
-        if (!doc) continue;
+        if (!doc) return null;
         const isFirstSend = !doc.sent_at;
         const endpoint = isFirstSend
-          ? `/api/documents/${id}/pdf`        // serves the stored "מקור"
+          ? `/api/documents/${id}/pdf`        // canonical "מקור"
           : `/api/documents/${id}/pdf-copy`;  // inline "נאמן למקור"
         const res = await fetch(endpoint, { credentials: 'same-origin' });
-        if (!res.ok) {
-          toast({ variant: 'destructive', title: `קבלה ${doc.number} לא נטענה` });
-          continue;
-        }
-        if (isFirstSend) firstSendIds.push(id);
+        if (!res.ok) throw new Error(`#${doc.number}: ${res.status}`);
         const blob = await res.blob();
-        // ASCII filename — WhatsApp doesn't render Hebrew filenames
-        // reliably across all clients (tested, came back as junk).
         const asciiType =
           doc.document_type === 'invoice' ? 'Invoice' :
           doc.document_type === 'invoice_receipt' ? 'Invoice-Receipt' :
           doc.document_type === 'credit' ? 'Credit' : 'Kabala';
         const filename = `${asciiType}-${doc.number}.pdf`;
-        files.push(new File([blob], filename, { type: 'application/pdf' }));
-        const signedUrl = res.headers.get('x-pdf-url');
-        if (signedUrl) urls.push(signedUrl);
+        return {
+          file: new File([blob], filename, { type: 'application/pdf' }),
+          url: res.headers.get('x-pdf-url') ?? '',
+          isFirstSend,
+          id,
+          number: doc.number,
+        };
+      };
+
+      const results = await Promise.allSettled(Array.from(selected).map(fetchOne));
+      const fetched = results
+        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof fetchOne>>>> => r.status === 'fulfilled' && r.value !== null)
+        .map((r) => r.value);
+      const failed = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+      if (failed.length > 0) {
+        toast({
+          variant: 'destructive',
+          title: `${failed.length} קבלות נכשלו בטעינה`,
+          description: failed.slice(0, 3).map((f) => f.reason?.message ?? '').join(' · '),
+        });
       }
+      if (fetched.length === 0) {
+        toast({ variant: 'destructive', title: 'אף קבלה לא נטענה — נסה שוב' });
+        return;
+      }
+
+      const files = fetched.map((f) => f.file);
+      const urls = fetched.map((f) => f.url).filter(Boolean);
+      const firstSendIds = fetched.filter((f) => f.isFirstSend).map((f) => f.id);
 
       const message =
         `היי ${customerName},\n` +
@@ -108,19 +125,32 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
             .from('documents')
             .update({ sent_at: nowIso, sent_via: 'whatsapp' })
             .in('id', firstSendIds)
-            .is('sent_at', null); // only flip docs that were never sent
+            .is('sent_at', null);
         } catch {
           // non-fatal
         }
       }
 
       const navAny = navigator as any;
-      if (files.length > 0 && navAny.canShare && navAny.canShare({ files })) {
-        await navAny.share({ files, text: message, title: `קבלות מ-${businessName}` });
-        await markFirstSendsAsSent();
-        toast({ title: `${files.length} קבלות נשלחו` });
-        clearAll();
-        return;
+      // Some platforms reject canShare when the combined attachment size
+      // is too big or count is too high. Detect that case explicitly so
+      // we can fall back to the link-only WhatsApp open instead of
+      // silently doing nothing.
+      const canShareFiles =
+        files.length > 0 && navAny.canShare && navAny.canShare({ files });
+
+      if (canShareFiles) {
+        try {
+          await navAny.share({ files, text: message, title: `קבלות מ-${businessName}` });
+          await markFirstSendsAsSent();
+          toast({ title: `${files.length} קבלות נשלחו` });
+          clearAll();
+          return;
+        } catch (shareErr: any) {
+          // User-cancellation is a normal AbortError; swallow it without
+          // bothering the user. Anything else fall through to the link path.
+          if (shareErr?.name === 'AbortError') return;
+        }
       }
 
       // Fallback — open WhatsApp with the message + each URL on its own line
@@ -130,6 +160,7 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
       window.open(url, '_blank');
       await markFirstSendsAsSent();
     } catch (e: any) {
+      if (e?.name === 'AbortError') return;
       toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });
     } finally {
       setSending(false);
