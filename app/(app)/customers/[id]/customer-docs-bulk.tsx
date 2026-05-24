@@ -62,59 +62,43 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
     }
     setSending(true);
     try {
-      // Fetch every selected PDF as a Blob in parallel. We use the actual
-      // file content so the share goes out with real attachments — no
-      // URLs in the WhatsApp message body, just a clean Hebrew note +
-      // N PDF files attached.
-      const fetchOne = async (id: string) => {
-        const doc = docs.find((d) => d.id === id);
-        if (!doc) return null;
-        const isFirstSend = !doc.sent_at;
-        const endpoint = isFirstSend
-          ? `/api/documents/${id}/pdf`        // canonical "מקור"
-          : `/api/documents/${id}/pdf-copy`;  // inline "נאמן למקור"
-        const res = await fetch(endpoint, { credentials: 'same-origin' });
-        if (!res.ok) throw new Error(`#${doc.number}: ${res.status}`);
-        const blob = await res.blob();
-        const asciiType =
-          doc.document_type === 'invoice' ? 'Invoice' :
-          doc.document_type === 'invoice_receipt' ? 'Invoice-Receipt' :
-          doc.document_type === 'credit' ? 'Credit' : 'Kabala';
-        const filename = `${asciiType}-${doc.number}.pdf`;
-        return {
-          file: new File([blob], filename, { type: 'application/pdf' }),
-          url: res.headers.get('x-pdf-url') ?? '',
-          isFirstSend,
-          id,
-          number: doc.number,
-        };
-      };
+      const ids = Array.from(selected);
+      const count = ids.length;
+      const firstSendIds = ids.filter((id) => {
+        const d = docs.find((x) => x.id === id);
+        return d && !d.sent_at;
+      });
 
-      const results = await Promise.allSettled(Array.from(selected).map(fetchOne));
-      const fetched = results
-        .filter((r): r is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof fetchOne>>>> => r.status === 'fulfilled' && r.value !== null)
-        .map((r) => r.value);
-      const failed = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
-      if (failed.length > 0) {
+      // Merge all selected PDFs into ONE file server-side. WhatsApp on
+      // mobile doesn't reliably accept multiple file attachments via the
+      // Web Share API — sending a single combined PDF dodges that
+      // limitation entirely and is also nicer for the recipient (one
+      // attachment instead of five).
+      const mergeRes = await fetch('/api/documents/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ ids, copyMode: 'auto' }),
+      });
+      if (!mergeRes.ok) {
+        const errJson = await mergeRes.json().catch(() => ({}));
         toast({
           variant: 'destructive',
-          title: `${failed.length} קבלות נכשלו בטעינה`,
-          description: failed.slice(0, 3).map((f) => f.reason?.message ?? '').join(' · '),
+          title: 'איחוד הקבלות נכשל',
+          description: (errJson as any)?.error ?? `HTTP ${mergeRes.status}`,
         });
-      }
-      if (fetched.length === 0) {
-        toast({ variant: 'destructive', title: 'אף קבלה לא נטענה — נסה שוב' });
         return;
       }
-
-      const files = fetched.map((f) => f.file);
-      const urls = fetched.map((f) => f.url).filter(Boolean);
-      const firstSendIds = fetched.filter((f) => f.isFirstSend).map((f) => f.id);
-      const count = fetched.length;
+      const mergedBlob = await mergeRes.blob();
+      const mergedFile = new File(
+        [mergedBlob],
+        count === 1 ? `Kabala-${docs.find((d) => d.id === ids[0])?.number ?? ''}.pdf` : `Kabalot-${count}.pdf`,
+        { type: 'application/pdf' },
+      );
 
       const message =
         `היי ${customerName},\n` +
-        `מצורפות ${count} קבלות\n` +
+        (count === 1 ? `מצורפת קבלה` : `מצורפות ${count} קבלות`) + `\n` +
         `מ-${businessName}.`;
 
       async function markFirstSendsAsSent() {
@@ -132,15 +116,11 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
       }
 
-      // Try Web Share API with all the files attached — clean message, no
-      // URLs at all. The recipient sees N PDF files in the WhatsApp chat.
-      // User picks WhatsApp from the system share sheet (one extra tap)
-      // and the files attach as a single message.
       const navAny = navigator as any;
-      const canShareFiles = navAny.canShare && navAny.canShare({ files });
-      if (canShareFiles) {
+      const canShareFile = navAny.canShare && navAny.canShare({ files: [mergedFile] });
+      if (canShareFile) {
         try {
-          await navAny.share({ files, text: message, title: `קבלות מ-${businessName}` });
+          await navAny.share({ files: [mergedFile], text: message, title: `קבלות מ-${businessName}` });
           await markFirstSendsAsSent();
           toast({ title: `${count} קבלות נשלחו` });
           clearAll();
@@ -150,13 +130,16 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
       }
 
-      // Fallback (older browsers / no Web Share): wa.me with links. Not
-      // ideal — we tried hard to avoid it — but better than nothing.
-      const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-      const text = encodeURIComponent(message + '\n\n' + urls.join('\n'));
-      const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
-      window.open(url, '_blank');
+      // Fallback: download the merged file so the user can attach it
+      // manually in WhatsApp Web (desktop without Web Share).
+      const objUrl = URL.createObjectURL(mergedBlob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = mergedFile.name;
+      a.click();
+      URL.revokeObjectURL(objUrl);
       await markFirstSendsAsSent();
+      toast({ title: 'הקובץ הורד — צרף אותו ידנית ל-WhatsApp' });
       clearAll();
     } catch (e: any) {
       if (e?.name === 'AbortError') return;

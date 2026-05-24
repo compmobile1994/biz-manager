@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { ArrowRight, FileText, Plus } from 'lucide-react';
 import { CustomerDocsBulk } from './customer-docs-bulk';
+import { CustomerPeriodReport } from './customer-period-report';
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -144,6 +145,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           )}
         </CardContent>
       </Card>
+
+      {documents.length > 0 && (
+        <CustomerPeriodReport
+          docs={documents as any}
+          customerName={customer.name}
+          businessName={businessName}
+        />
+      )}
     </div>
   );
 }
