@@ -62,32 +62,16 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
     }
     setSending(true);
     try {
-      // Fetch every selected PDF in parallel — sequential was timing out
-      // when the user picked 3+ receipts, since each PDF download takes
-      // 1-3s in serverless environments. Parallel + Promise.allSettled
-      // gives us a single ~3s wait regardless of count.
+      // Fetch a signed PDF URL per document in parallel. The /pdf-url
+      // endpoint returns just JSON {url}, no blob streaming — milliseconds
+      // per call, scales to dozens of receipts without blocking.
       const fetchOne = async (id: string) => {
         const doc = docs.find((d) => d.id === id);
         if (!doc) return null;
-        const isFirstSend = !doc.sent_at;
-        const endpoint = isFirstSend
-          ? `/api/documents/${id}/pdf`        // canonical "מקור"
-          : `/api/documents/${id}/pdf-copy`;  // inline "נאמן למקור"
-        const res = await fetch(endpoint, { credentials: 'same-origin' });
+        const res = await fetch(`/api/documents/${id}/pdf-url`, { credentials: 'same-origin' });
         if (!res.ok) throw new Error(`#${doc.number}: ${res.status}`);
-        const blob = await res.blob();
-        const asciiType =
-          doc.document_type === 'invoice' ? 'Invoice' :
-          doc.document_type === 'invoice_receipt' ? 'Invoice-Receipt' :
-          doc.document_type === 'credit' ? 'Credit' : 'Kabala';
-        const filename = `${asciiType}-${doc.number}.pdf`;
-        return {
-          file: new File([blob], filename, { type: 'application/pdf' }),
-          url: res.headers.get('x-pdf-url') ?? '',
-          isFirstSend,
-          id,
-          number: doc.number,
-        };
+        const { url } = (await res.json()) as { url: string };
+        return { url, isFirstSend: !doc.sent_at, id, number: doc.number };
       };
 
       const results = await Promise.allSettled(Array.from(selected).map(fetchOne));
@@ -107,13 +91,13 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return;
       }
 
-      const files = fetched.map((f) => f.file);
-      const urls = fetched.map((f) => f.url).filter(Boolean);
+      const urls = fetched.map((f) => f.url);
       const firstSendIds = fetched.filter((f) => f.isFirstSend).map((f) => f.id);
+      const count = fetched.length;
 
       const message =
         `היי ${customerName},\n` +
-        `מצורפות ${files.length} קבלות\n` +
+        `מצורפות ${count} קבלות\n` +
         `מ-${businessName}.`;
 
       async function markFirstSendsAsSent() {
@@ -131,34 +115,17 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
       }
 
-      const navAny = navigator as any;
-      // Some platforms reject canShare when the combined attachment size
-      // is too big or count is too high. Detect that case explicitly so
-      // we can fall back to the link-only WhatsApp open instead of
-      // silently doing nothing.
-      const canShareFiles =
-        files.length > 0 && navAny.canShare && navAny.canShare({ files });
-
-      if (canShareFiles) {
-        try {
-          await navAny.share({ files, text: message, title: `קבלות מ-${businessName}` });
-          await markFirstSendsAsSent();
-          toast({ title: `${files.length} קבלות נשלחו` });
-          clearAll();
-          return;
-        } catch (shareErr: any) {
-          // User-cancellation is a normal AbortError; swallow it without
-          // bothering the user. Anything else fall through to the link path.
-          if (shareErr?.name === 'AbortError') return;
-        }
-      }
-
-      // Fallback — open WhatsApp with the message + each URL on its own line
+      // Direct WhatsApp open via wa.me — no system share sheet picker,
+      // opens straight to the customer's chat with the message + every
+      // PDF link pre-typed. Trade-off: links instead of attached files,
+      // but the recipient gets the same PDFs in one extra tap each.
       const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
       const text = encodeURIComponent(message + '\n\n' + urls.join('\n'));
       const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
       window.open(url, '_blank');
       await markFirstSendsAsSent();
+      toast({ title: `${count} קבלות מוכנות לשליחה ב-WhatsApp` });
+      clearAll();
     } catch (e: any) {
       if (e?.name === 'AbortError') return;
       toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });

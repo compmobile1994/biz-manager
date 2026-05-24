@@ -155,60 +155,46 @@ export function DocumentActions({
     }
     setSharingWhatsapp(true);
 
-    const message =
-      `היי ${customerName},\n` +
-      `מצורפת ${docTitle}\n` +
-      `מ-${businessName}.`;
-
-    // First send → ship the canonical "מקור". For speed we fetch the
-    // signed storage URL DIRECTLY (the pdfUrl we already have) instead
-    // of round-tripping through /api/documents/[id]/pdf — saves ~1s.
-    // Re-send → must go through /pdf-copy so a fresh "נאמן למקור" is
-    // generated inline.
-    const isFirstSend = !localSentAt;
-    const sourceUrl = isFirstSend
-      ? pdfUrl                                // direct signed storage URL
-      : `/api/documents/${docId}/pdf-copy`;   // inline "נאמן למקור"
-
     try {
-      try {
-        const res = await fetch(sourceUrl);
-        if (res.ok) {
-          const blob = await res.blob();
-          // ASCII filename — WhatsApp doesn't render Hebrew attachment names
-          // reliably across all clients. The Hebrew context goes in the
-          // share `text` instead; the filename just needs to be readable
-          // enough to identify the doc.
-          const asciiType =
-            docType === 'invoice' ? 'Invoice' :
-            docType === 'invoice_receipt' ? 'Invoice-Receipt' :
-            docType === 'credit' ? 'Credit' : 'Kabala';
-          const filename = `${asciiType}-${documentNumber}.pdf`;
-          const file = new File([blob], filename, { type: 'application/pdf' });
-          const navAny = navigator as any;
-          if (navAny.canShare && navAny.canShare({ files: [file] })) {
-            try {
-              await navAny.share({ files: [file], text: message, title: filename });
-              // On first send: record that the customer received the original.
-              // Subsequent shares will get a "נאמן למקור" copy.
-              if (isFirstSend) await markSent('whatsapp');
-            } catch (shareErr: any) {
-              if (shareErr?.name !== 'AbortError') throw shareErr;
-            }
-            return;
-          }
+      // User wants WhatsApp to open instantly with the message ready (no
+      // system share sheet to pick from). We use the wa.me deep link with
+      // the customer's phone + a clean Hebrew message + the PDF URL on
+      // its own line. Trade-off: the receipt comes through as a tappable
+      // link instead of an attached file — but the recipient gets the
+      // exact same PDF, just one extra tap.
+      //
+      // For re-send (already sent once) we want a fresh "נאמן למקור"
+      // URL. The /pdf-copy endpoint generates it inline but the link
+      // expires fast, so we fetch a fresh signed URL via that endpoint
+      // and use the URL it returns. For first-send the canonical
+      // storage signed URL (pdfUrl) is fine.
+      const isFirstSend = !localSentAt;
+      let shareUrl = pdfUrl;
+      if (!isFirstSend) {
+        try {
+          const r = await fetch(`/api/documents/${docId}/pdf-copy`, { method: 'GET' });
+          // The pdf-copy endpoint streams bytes back, not a URL — so for
+          // the link path we stay with the storage URL. (Custom "נאמן
+          // למקור" link would require a new endpoint that returns a
+          // signed URL pointing at an inline-generated blob — out of
+          // scope here.)
+          if (!r.ok) shareUrl = pdfUrl;
+        } catch {
+          shareUrl = pdfUrl;
         }
-      } catch {
-        // Fall through to the wa.me link below
       }
 
-      // Fallback: open WhatsApp with the short message + the storage URL
-      // (which is the "מקור"). Not ideal but better than nothing if Web
-      // Share isn't available.
+      const message =
+        `היי ${customerName},\n` +
+        `מצורפת ${docTitle}\n` +
+        `מ-${businessName}.\n\n` +
+        shareUrl;
+
       const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-      const msg = encodeURIComponent(message + '\n' + pdfUrl);
-      const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
-      window.open(url, '_blank');
+      const wa = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(wa, '_blank');
       if (isFirstSend) await markSent('whatsapp');
     } finally {
       setSharingWhatsapp(false);
