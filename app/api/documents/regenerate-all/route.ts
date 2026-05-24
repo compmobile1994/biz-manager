@@ -61,7 +61,8 @@ export async function POST() {
 
       const pdfBytes = await generateDocumentPdf({
         doc,
-        copy: 'copy', // re-render of an already-issued receipt → "העתק"
+        // Storage always holds the "מקור" — copies for customer sharing are
+        // generated inline by /pdf-copy and never written back.
         lines: (items ?? []).map((it: any) => ({
           description: it.description,
           quantity: Number(it.quantity),

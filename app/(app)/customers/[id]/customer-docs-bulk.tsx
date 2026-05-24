@@ -60,22 +60,17 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
     }
     setSending(true);
     try {
-      // First: regenerate every selected PDF as "נאמן למקור" (in parallel).
-      // The customer should always receive a certified-copy version, not
-      // the original "מקור" sitting in storage from issue time. Failures
-      // are non-fatal — we'll just ship whatever's currently in storage.
-      await Promise.all(
-        Array.from(selected).map((id) =>
-          fetch(`/api/documents/${id}/regenerate-pdf`, { method: 'POST' }).catch(() => null),
-        ),
-      );
-
+      // Fetch a fresh "נאמן למקור" copy for every selected document. The
+      // /pdf-copy endpoint generates the certified-copy version inline
+      // without touching the canonical "מקור" in storage — so the user's
+      // original is preserved and the customer always gets a certified
+      // copy.
       const files: File[] = [];
       const urls: string[] = [];
       for (const id of selected) {
         const doc = docs.find((d) => d.id === id);
         if (!doc) continue;
-        const res = await fetch(`/api/documents/${id}/pdf`, { credentials: 'same-origin' });
+        const res = await fetch(`/api/documents/${id}/pdf-copy`, { credentials: 'same-origin' });
         if (!res.ok) {
           toast({ variant: 'destructive', title: `קבלה ${doc.number} לא נטענה` });
           continue;

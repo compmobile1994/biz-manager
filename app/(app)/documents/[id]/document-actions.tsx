@@ -144,38 +144,19 @@ export function DocumentActions({
       return;
     }
 
-    // Always regenerate as "נאמן למקור" before sharing — the original
-    // (with "מקור" band) is what the customer received at issue time,
-    // any copy we ship now must be marked as a certified true copy.
-    // Best-effort: if regenerate fails for any reason we still ship
-    // whatever's in storage rather than blocking the user.
-    try {
-      await fetch(`/api/documents/${docId}/regenerate-pdf`, { method: 'POST' });
-    } catch {
-      // ignore — fall through to share whatever pdfUrl is
-    }
-
-    // Short, clean Hebrew message — no emojis (they render as junk
-    // characters in some WhatsApp/SMS receivers), no business name spam,
-    // no bank/Bit info (those have their own buttons). docTitle already
-    // contains "קבלה 185" so we don't repeat the number.
     const message =
       `היי ${customerName},\n` +
       `מצורפת ${docTitle}\n` +
       `מ-${businessName}.`;
 
-    // Try the modern Web Share API first — attaches the actual PDF as a
-    // file together with the short Hebrew note. Works on Android Chrome
-    // PWA and recent iOS Safari.
+    // Fetch a one-shot "נאמן למקור" copy of the PDF. This endpoint generates
+    // it inline without touching the canonical "מקור" sitting in storage,
+    // so the user can always download the original later.
     try {
-      const res = await fetch(pdfUrl);
+      const res = await fetch(`/api/documents/${docId}/pdf-copy`);
       if (res.ok) {
         const blob = await res.blob();
-        // ASCII-only filename for the shared file — WhatsApp + some Android/
-        // iOS file pickers mangle Hebrew characters in attachment names,
-        // making the file look like gibberish to the recipient.
-        // The user can still see the doc type + number; the Hebrew context
-        // goes in the share `text` instead.
+        // ASCII-only filename — WhatsApp / Android pickers mangle Hebrew.
         const asciiType =
           docType === 'invoice' ? 'invoice' :
           docType === 'invoice_receipt' ? 'invoice-receipt' :
@@ -192,8 +173,9 @@ export function DocumentActions({
       // Fall through to the wa.me link below
     }
 
-    // Fallback: open WhatsApp with the short message + PDF URL on its own
-    // line so the link is clearly tap-able.
+    // Fallback: open WhatsApp with the short message + the storage URL
+    // (which is the "מקור"). Not ideal but better than nothing if Web
+    // Share isn't available.
     const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
     const msg = encodeURIComponent(message + '\n' + pdfUrl);
     const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;

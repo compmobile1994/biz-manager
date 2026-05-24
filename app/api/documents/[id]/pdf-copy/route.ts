@@ -1,48 +1,29 @@
 import { NextResponse } from 'next/server';
-import { createClient as createSsrClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 import { generateDocumentPdf } from '@/lib/pdf/html-to-pdf';
-import { isServiceRoleBearer } from '@/lib/auth-bearer';
 
 export const runtime = 'nodejs';
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+// Returns a freshly-generated "נאמן למקור" copy of the document's PDF.
+//
+// Unlike /api/documents/[id]/pdf (which serves the canonical "מקור" from
+// storage) and /api/documents/[id]/regenerate-pdf (which rewrites the
+// "מקור" in storage after data changes), THIS endpoint never touches
+// storage — it builds a one-shot certified-copy version in memory and
+// returns the bytes. Used by the WhatsApp / SMS / email share flows so
+// the customer always receives a clearly-marked נאמן למקור while the
+// original stays intact for the business owner.
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-
-  // Two auth modes:
-  //   1. Normal user session (cookie-based) — interactive button click
-  //   2. Service-role bearer token in Authorization header — for CLI / script
-  //      one-shot recovery of failed PDFs (bypasses RLS / user login).
-  const isServiceRole = isServiceRoleBearer(req.headers.get('authorization'));
-
-  let supabase: any;
-  let userId: string;
-
-  if (isServiceRole) {
-    supabase = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
-    const { data: ownerRow } = await supabase
-      .from('documents')
-      .select('user_id')
-      .eq('id', id)
-      .maybeSingle();
-    if (!ownerRow) return NextResponse.json({ error: 'not found' }, { status: 404 });
-    userId = ownerRow.user_id;
-  } else {
-    const ssr = await createSsrClient();
-    const { data: { user } } = await ssr.auth.getUser();
-    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-    supabase = ssr;
-    userId = user.id;
-  }
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const [{ data: doc }, { data: items }, { data: payments }, { data: settings }] = await Promise.all([
     supabase.from('documents').select('*').eq('id', id).maybeSingle(),
     supabase.from('document_items').select('*').eq('document_id', id).order('sort_order'),
     supabase.from('payments').select('*').eq('document_id', id),
-    supabase.from('business_settings').select('*').eq('user_id', userId).maybeSingle(),
+    supabase.from('business_settings').select('*').eq('user_id', user.id).maybeSingle(),
   ]);
   if (!doc) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
@@ -59,10 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const pdfBytes = await generateDocumentPdf({
       doc,
-      // This route writes to storage — keep the file labelled "מקור" so the
-      // user always has access to the canonical original. A separate
-      // /pdf-copy endpoint generates the "נאמן למקור" version on-the-fly
-      // for sharing, without touching storage.
+      copy: 'copy', // ← the whole point of this endpoint
       lines: (items ?? []).map((it: any) => ({
         description: it.description,
         quantity: Number(it.quantity),
@@ -92,15 +70,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       settings: settingsForPdf,
     });
 
-    const path = `${userId}/${doc.id}.pdf`;
-    const { error: upErr } = await supabase.storage.from('documents').upload(path, pdfBytes, {
-      contentType: 'application/pdf',
-      upsert: true,
+    return new NextResponse(Buffer.from(pdfBytes), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Length': String(pdfBytes.byteLength),
+        'Cache-Control': 'private, no-store',
+      },
     });
-    if (upErr) throw upErr;
-    await supabase.from('documents').update({ pdf_url: path }).eq('id', doc.id);
-
-    return NextResponse.json({ ok: true, pdf_url: path });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'PDF generation failed' }, { status: 500 });
   }
