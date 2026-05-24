@@ -168,10 +168,11 @@ export function DocumentActions({
     }
     setSharingWhatsapp(true);
 
-    // User-set exact wording — 3 short lines, with customer name on greeting.
+    // User-set exact wording — 3 short lines, with customer name on greeting
+    // and the receipt number after "מצורף קבלה".
     const message =
       `היי ${customerName}\n` +
-      `מצורף קבלה\n` +
+      `מצורף קבלה ${documentNumber}\n` +
       `מ${businessName}`;
 
     const isFirstSend = !localSentAt;

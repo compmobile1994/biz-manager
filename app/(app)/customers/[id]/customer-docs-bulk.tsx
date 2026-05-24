@@ -121,10 +121,30 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
       const filename = count === 1 ? `Kabala-${singleNumber}.pdf` : `Kabalot-${count}.pdf`;
       const mergedFile = new File([mergedBlob], filename, { type: 'application/pdf' });
 
-      // User-set exact wording — 3 short lines, with customer name on greeting.
+      // User-set exact wording — 3 short lines, with customer name on greeting
+      // and receipt numbers (+ count when >1):
+      //   1 receipt  → "מצורף קבלה 185"
+      //   2 receipts → "מצורף 2 קבלות 178 ו-186"
+      //   3+ receipts → "מצורף 3 קבלות 178, 185 ו-186"
+      const numbers = ids
+        .map((id) => docs.find((d) => d.id === id)?.number)
+        .filter((n): n is number => typeof n === 'number')
+        .sort((a, b) => a - b);
+      let numbersStr: string;
+      if (numbers.length <= 1) {
+        numbersStr = numbers[0]?.toString() ?? '';
+      } else if (numbers.length === 2) {
+        numbersStr = `${numbers[0]} ו-${numbers[1]}`;
+      } else {
+        const last = numbers[numbers.length - 1];
+        numbersStr = `${numbers.slice(0, -1).join(', ')} ו-${last}`;
+      }
+      const middle = count === 1
+        ? `מצורף קבלה ${numbersStr}`
+        : `מצורף ${count} קבלות ${numbersStr}`;
       const message =
         `היי ${customerName}\n` +
-        `מצורף קבלה\n` +
+        `${middle}\n` +
         `מ${businessName}`;
 
       setPrepared({ file: mergedFile, message, filename, ids, firstSendIds, count });
