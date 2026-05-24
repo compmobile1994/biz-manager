@@ -138,12 +138,16 @@ export default async function NewDocumentPage({
       .not('phone_number', 'is', null)
       .order('id', { ascending: false })
       .limit(500),
-    // For description autocomplete: fetch recent unique line item descriptions + prices
+    // For description autocomplete: fetch recent unique line item descriptions
+    // + prices. We also pull the customer_id via join so the form can offer
+    // per-customer price memory (auto-fill the price when the same customer
+    // is selected and the same description is typed). Newest first so the
+    // most recent price per (customer, description) wins.
     supabase
       .from('document_items')
-      .select('description, unit_price')
+      .select('description, unit_price, documents!inner(customer_id)')
       .order('id', { ascending: false })
-      .limit(300),
+      .limit(500),
   ]);
 
   // Build customer_id → unique phone numbers map for autocomplete
@@ -156,14 +160,33 @@ export default async function NewDocumentPage({
     if (!customerPhones[cid].includes(phone)) customerPhones[cid].push(phone);
   }
 
-  // Build description → recent unit_price map (most recent price per description wins)
+  // Two maps from the same query result:
+  //   recentItems         — global recent descriptions (autocomplete hint
+  //                         when no customer is selected)
+  //   customerItemHistory — per-customer (description → most recent price),
+  //                         used to auto-fill the price when the same
+  //                         customer is selected and the same description
+  //                         is typed.
   const recentItems: { description: string; unit_price: number }[] = [];
   const seenDesc = new Set<string>();
+  const customerItemHistory: Record<string, Record<string, number>> = {};
   for (const row of (recentLinesRes.data as any[] | null) ?? []) {
     const desc = row.description?.trim();
-    if (!desc || seenDesc.has(desc)) continue;
-    seenDesc.add(desc);
-    recentItems.push({ description: desc, unit_price: Number(row.unit_price) });
+    if (!desc) continue;
+    const price = Number(row.unit_price);
+    const cid = row.documents?.customer_id;
+    if (cid) {
+      if (!customerItemHistory[cid]) customerItemHistory[cid] = {};
+      // First write wins (rows are newest-first), so the most recent price
+      // for this customer + this description is what stays.
+      if (customerItemHistory[cid][desc] === undefined) {
+        customerItemHistory[cid][desc] = price;
+      }
+    }
+    if (!seenDesc.has(desc)) {
+      seenDesc.add(desc);
+      recentItems.push({ description: desc, unit_price: price });
+    }
   }
 
   // Build a map of expected next numbers per document type
@@ -199,6 +222,7 @@ export default async function NewDocumentPage({
         nextNumbers={nextNumbers}
         prefill={prefill}
         customerPhones={customerPhones}
+        customerItemHistory={customerItemHistory}
         recentItems={recentItems}
         draftId={draftId}
         settings={{

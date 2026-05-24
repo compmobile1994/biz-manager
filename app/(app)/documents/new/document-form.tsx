@@ -85,6 +85,7 @@ export function DocumentForm({
   nextNumbers,
   prefill,
   customerPhones,
+  customerItemHistory,
   recentItems,
   draftId,
 }: {
@@ -96,6 +97,10 @@ export function DocumentForm({
   nextNumbers: Record<string, number>;
   prefill?: PrefillData | null;
   customerPhones: Record<string, string[]>;
+  // customer_id → (description → most recent unit_price for that customer).
+  // Used to auto-suggest the price when the same customer + description
+  // combo has been billed before.
+  customerItemHistory: Record<string, Record<string, number>>;
   recentItems: { description: string; unit_price: number }[];
   draftId?: string | null;
 }) {
@@ -516,6 +521,7 @@ export function DocumentForm({
               canRemove={lines.length > 1}
               phoneSuggestions={customerId ? customerPhones[customerId] ?? [] : []}
               recentItems={recentItems}
+              customerPriceMemory={customerId ? customerItemHistory[customerId] ?? {} : {}}
             />
           ))}
           <div className="border-t pt-3 flex justify-between items-center">
@@ -642,6 +648,7 @@ function LineRow({
   canRemove,
   phoneSuggestions,
   recentItems,
+  customerPriceMemory,
 }: {
   idx: number;
   line: Line;
@@ -652,22 +659,39 @@ function LineRow({
   canRemove: boolean;
   phoneSuggestions: string[];
   recentItems: { description: string; unit_price: number }[];
+  // description → most recent price for the currently-selected customer.
+  // Empty {} when no customer is selected.
+  customerPriceMemory: Record<string, number>;
 }) {
   const phonesListId = `phones-list-${idx}`;
   const itemsListId = `items-list-${idx}`;
 
-  // Plain description change — no auto-price-fill (that was surprising users).
-  // BUT: business rule from the user — any line that mentions "תיקון" (repair)
-  // gets 3-month warranty by default, except FRP services. We only apply this
-  // when the warranty field is still empty so we don't overwrite a value the
-  // user explicitly typed.
+  // Description change. Two side effects, both guarded so they never stomp
+  // a value the user has explicitly typed:
+  //   1. Auto 3-month warranty when "תיקון" appears (except FRP)
+  //   2. Auto-fill the price IF this exact description was billed to this
+  //      same customer before AND the price field is still empty.
   function handleDescriptionChange(newDesc: string) {
     const patch: Partial<Line> = { description: newDesc };
+
+    // (1) warranty
     const isRepair = newDesc.includes('תיקון');
     const isFrp = /frp/i.test(newDesc);
     if (isRepair && !isFrp && !line.warranty_months) {
       patch.warranty_months = '3';
     }
+
+    // (2) per-customer price memory. Only fills when the field is 0/empty
+    // so user-typed prices are NEVER overwritten. Matches by exact
+    // description AND only applies when a customer is selected.
+    const trimmed = newDesc.trim();
+    if (trimmed && (!line.unit_price || line.unit_price === 0)) {
+      const remembered = customerPriceMemory[trimmed];
+      if (typeof remembered === 'number' && remembered > 0) {
+        patch.unit_price = Math.round(remembered);
+      }
+    }
+
     onChange(patch);
   }
   const lineTotal = Number(line.quantity || 0) * Number(line.unit_price || 0);
@@ -710,13 +734,23 @@ function LineRow({
             onChange={(e) => handleDescriptionChange(e.target.value)}
             autoComplete="off"
           />
-          {recentItems.length > 0 && (
-            <datalist id={itemsListId}>
-              {recentItems.map((it) => (
-                <option key={it.description} value={it.description} />
-              ))}
-            </datalist>
-          )}
+          {/* Suggestions: this customer's past items first (the prices we'll
+              actually auto-fill from), then the global recent list. Deduped
+              so the same description never appears twice. */}
+          {(() => {
+            const customerDescs = Object.keys(customerPriceMemory);
+            const seen = new Set<string>(customerDescs);
+            const merged: string[] = [
+              ...customerDescs,
+              ...recentItems.map((it) => it.description).filter((d) => !seen.has(d) && (seen.add(d), true)),
+            ];
+            if (merged.length === 0) return null;
+            return (
+              <datalist id={itemsListId}>
+                {merged.map((d) => (<option key={d} value={d} />))}
+              </datalist>
+            );
+          })()}
         </div>
         <div className="md:col-span-3 space-y-1">
           <Label className="text-xs">כמות</Label>
