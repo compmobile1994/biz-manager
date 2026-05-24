@@ -52,6 +52,33 @@ export function CustomerPeriodReport({ docs, customerName, businessName }: Props
     }
     setBuilding(true);
     try {
+      if (action === 'share') {
+        // Short-link path: mint a link, open wa.me with one clean URL.
+        const linkRes = await fetch('/api/share-links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ ids: inRange.map((d) => d.id), copyMode: 'copy' }),
+        });
+        if (!linkRes.ok) {
+          const j = await linkRes.json().catch(() => ({}));
+          toast({ variant: 'destructive', title: 'שגיאה ביצירת קישור', description: (j as any)?.error ?? '' });
+          return;
+        }
+        const { url: shortUrl } = (await linkRes.json()) as { url: string };
+        const message =
+          `היי ${customerName},\n` +
+          (mode === 'year' ? `מצורף דוח שנתי ${year}` : `מצורף דוח חודשי ${HEBREW_MONTHS[month]} ${year}`) + `\n` +
+          `(${inRange.length} קבלות)\n` +
+          `מ-${businessName}.\n\n` +
+          shortUrl;
+        const wa = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        window.open(wa, '_blank');
+        toast({ title: 'הדוח מוכן לשליחה ב-WhatsApp' });
+        return;
+      }
+
+      // Download action — fetch the merged PDF directly and save locally.
       const res = await fetch('/api/documents/merge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,27 +94,6 @@ export function CustomerPeriodReport({ docs, customerName, businessName }: Props
       const filename = mode === 'year'
         ? `Annual-Report-${year}.pdf`
         : `Monthly-Report-${year}-${String(month + 1).padStart(2, '0')}.pdf`;
-      const file = new File([blob], filename, { type: 'application/pdf' });
-
-      if (action === 'share') {
-        const navAny = navigator as any;
-        const message =
-          `היי ${customerName},\n` +
-          (mode === 'year' ? `מצורף דוח שנתי ${year}` : `מצורף דוח חודשי ${HEBREW_MONTHS[month]} ${year}`) + `\n` +
-          `(${inRange.length} קבלות)\n` +
-          `מ-${businessName}.`;
-        if (navAny.canShare && navAny.canShare({ files: [file] })) {
-          try {
-            await navAny.share({ files: [file], text: message, title: filename });
-            toast({ title: 'הדוח נשלח' });
-          } catch (e: any) {
-            if (e?.name !== 'AbortError') throw e;
-          }
-          return;
-        }
-      }
-
-      // Download fallback (and the explicit "Download" action)
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objUrl;

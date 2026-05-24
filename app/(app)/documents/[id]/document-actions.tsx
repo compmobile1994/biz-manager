@@ -149,61 +149,44 @@ export function DocumentActions({
 
   async function shareWhatsApp() {
     if (sharingWhatsapp) return; // double-tap guard
-    if (!pdfUrl) {
-      toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
-      return;
-    }
     setSharingWhatsapp(true);
 
-    // Clean Hebrew message — NO URL. The PDF goes in as a real attached
-    // file via the Web Share API. Trade-off: the user picks WhatsApp from
-    // the system share sheet (one extra tap) — but the message itself is
-    // pristine.
-    const message =
-      `היי ${customerName},\n` +
-      `מצורפת ${docTitle}\n` +
-      `מ-${businessName}.`;
-
-    // First send → ship the canonical "מקור". Re-send → fresh "נאמן למקור".
-    const isFirstSend = !localSentAt;
-    const sourceUrl = isFirstSend
-      ? pdfUrl                                // direct signed storage URL
-      : `/api/documents/${docId}/pdf-copy`;   // inline "נאמן למקור"
-
     try {
-      try {
-        const res = await fetch(sourceUrl);
-        if (res.ok) {
-          const blob = await res.blob();
-          const asciiType =
-            docType === 'invoice' ? 'Invoice' :
-            docType === 'invoice_receipt' ? 'Invoice-Receipt' :
-            docType === 'credit' ? 'Credit' : 'Kabala';
-          const filename = `${asciiType}-${documentNumber}.pdf`;
-          const file = new File([blob], filename, { type: 'application/pdf' });
-          const navAny = navigator as any;
-          if (navAny.canShare && navAny.canShare({ files: [file] })) {
-            try {
-              await navAny.share({ files: [file], text: message, title: filename });
-              if (isFirstSend) await markSent('whatsapp');
-            } catch (shareErr: any) {
-              if (shareErr?.name !== 'AbortError') throw shareErr;
-            }
-            return;
-          }
-        }
-      } catch {
-        // Fall through to the wa.me link below
+      const isFirstSend = !localSentAt;
+      // Mint a public short link (biz-manager-ochre.vercel.app/p/abc12345)
+      // that resolves to the merged PDF on the fly. This lets us put a
+      // short clean URL inside the WhatsApp message — and the wa.me deep
+      // link opens WhatsApp directly, no system share sheet needed.
+      const linkRes = await fetch('/api/share-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          ids: [docId],
+          copyMode: isFirstSend ? 'original' : 'copy',
+        }),
+      });
+      if (!linkRes.ok) {
+        const j = await linkRes.json().catch(() => ({}));
+        toast({ variant: 'destructive', title: 'שגיאה ביצירת קישור', description: (j as any)?.error ?? '' });
+        return;
       }
+      const { url: shortUrl } = (await linkRes.json()) as { url: string };
 
-      // Fallback only when Web Share API isn't available (older browsers
-      // / desktop without it). Still no URL in the message — just a link
-      // on its own line so the recipient can tap.
+      const message =
+        `היי ${customerName},\n` +
+        `מצורפת ${docTitle}\n` +
+        `מ-${businessName}.\n\n` +
+        shortUrl;
+
       const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-      const fallbackMsg = encodeURIComponent(message + '\n' + pdfUrl);
-      const wa = phone ? `https://wa.me/${phone}?text=${fallbackMsg}` : `https://wa.me/?text=${fallbackMsg}`;
+      const wa = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
       window.open(wa, '_blank');
       if (isFirstSend) await markSent('whatsapp');
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });
     } finally {
       setSharingWhatsapp(false);
     }

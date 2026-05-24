@@ -5,7 +5,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 // token). Skip the middleware redirect for them so service-role calls work.
 // API routes handle their own auth (user session OR service-role bearer
 // token). Skip the middleware redirect for them so service-role calls work.
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/documents', '/api/email'];
+// /p/<code> is the public share-link resolver — recipients receive the URL
+// via WhatsApp and click it without being logged in, so it must not redirect
+// to /login.
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/documents', '/api/email', '/p/'];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
