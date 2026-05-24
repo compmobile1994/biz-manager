@@ -55,6 +55,10 @@ export function DocumentActions({
   const [emailTo, setEmailTo] = useState(customerEmail ?? '');
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  // Separate loading state for the WhatsApp button so the icon spins +
+  // button disables instantly on tap — user feedback that the share is
+  // actually being prepared (PDF fetch can take a second or two).
+  const [sharingWhatsapp, setSharingWhatsapp] = useState(false);
   // Local mirror of sent_at — flipped to "now" on the first successful share
   // so the next share (in the same session) correctly picks "נאמן למקור".
   const [localSentAt, setLocalSentAt] = useState<string | null>(sentAt);
@@ -144,59 +148,71 @@ export function DocumentActions({
   }
 
   async function shareWhatsApp() {
+    if (sharingWhatsapp) return; // double-tap guard
     if (!pdfUrl) {
       toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
       return;
     }
+    setSharingWhatsapp(true);
 
     const message =
       `היי ${customerName},\n` +
       `מצורפת ${docTitle}\n` +
       `מ-${businessName}.`;
 
-    // First send → ship the canonical "מקור" from storage and record it.
-    // Re-send → generate a fresh "נאמן למקור" inline (storage untouched).
+    // First send → ship the canonical "מקור". For speed we fetch the
+    // signed storage URL DIRECTLY (the pdfUrl we already have) instead
+    // of round-tripping through /api/documents/[id]/pdf — saves ~1s.
+    // Re-send → must go through /pdf-copy so a fresh "נאמן למקור" is
+    // generated inline.
     const isFirstSend = !localSentAt;
     const sourceUrl = isFirstSend
-      ? `/api/documents/${docId}/pdf`        // serves the stored "מקור"
-      : `/api/documents/${docId}/pdf-copy`;  // inline "נאמן למקור"
+      ? pdfUrl                                // direct signed storage URL
+      : `/api/documents/${docId}/pdf-copy`;   // inline "נאמן למקור"
 
     try {
-      const res = await fetch(sourceUrl);
-      if (res.ok) {
-        const blob = await res.blob();
-        // ASCII filename — WhatsApp doesn't render Hebrew attachment names
-        // reliably across all clients. We tried "קבלה 185.pdf" — it came
-        // through as junk for the user. The Hebrew context goes in the
-        // share `text` instead; the filename just needs to be readable
-        // enough to identify the doc.
-        const asciiType =
-          docType === 'invoice' ? 'Invoice' :
-          docType === 'invoice_receipt' ? 'Invoice-Receipt' :
-          docType === 'credit' ? 'Credit' : 'Kabala';
-        const filename = `${asciiType}-${documentNumber}.pdf`;
-        const file = new File([blob], filename, { type: 'application/pdf' });
-        const navAny = navigator as any;
-        if (navAny.canShare && navAny.canShare({ files: [file] })) {
-          await navAny.share({ files: [file], text: message, title: filename });
-          // On first send: record that the customer received the original.
-          // Subsequent shares will get a "נאמן למקור" copy.
-          if (isFirstSend) await markSent('whatsapp');
-          return;
+      try {
+        const res = await fetch(sourceUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          // ASCII filename — WhatsApp doesn't render Hebrew attachment names
+          // reliably across all clients. The Hebrew context goes in the
+          // share `text` instead; the filename just needs to be readable
+          // enough to identify the doc.
+          const asciiType =
+            docType === 'invoice' ? 'Invoice' :
+            docType === 'invoice_receipt' ? 'Invoice-Receipt' :
+            docType === 'credit' ? 'Credit' : 'Kabala';
+          const filename = `${asciiType}-${documentNumber}.pdf`;
+          const file = new File([blob], filename, { type: 'application/pdf' });
+          const navAny = navigator as any;
+          if (navAny.canShare && navAny.canShare({ files: [file] })) {
+            try {
+              await navAny.share({ files: [file], text: message, title: filename });
+              // On first send: record that the customer received the original.
+              // Subsequent shares will get a "נאמן למקור" copy.
+              if (isFirstSend) await markSent('whatsapp');
+            } catch (shareErr: any) {
+              if (shareErr?.name !== 'AbortError') throw shareErr;
+            }
+            return;
+          }
         }
+      } catch {
+        // Fall through to the wa.me link below
       }
-    } catch {
-      // Fall through to the wa.me link below
-    }
 
-    // Fallback: open WhatsApp with the short message + the storage URL
-    // (which is the "מקור"). Not ideal but better than nothing if Web
-    // Share isn't available.
-    const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-    const msg = encodeURIComponent(message + '\n' + pdfUrl);
-    const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
-    window.open(url, '_blank');
-    if (isFirstSend) await markSent('whatsapp');
+      // Fallback: open WhatsApp with the short message + the storage URL
+      // (which is the "מקור"). Not ideal but better than nothing if Web
+      // Share isn't available.
+      const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+      const msg = encodeURIComponent(message + '\n' + pdfUrl);
+      const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
+      window.open(url, '_blank');
+      if (isFirstSend) await markSent('whatsapp');
+    } finally {
+      setSharingWhatsapp(false);
+    }
   }
 
   // Record that the document was sent (first time only). The server-side
@@ -316,9 +332,9 @@ export function DocumentActions({
               <Mail className="h-4 w-4" />
               שלח במייל
             </Button>
-            <Button variant="outline" size="sm" onClick={shareWhatsApp}>
-              <MessageCircle className="h-4 w-4" />
-              WhatsApp
+            <Button variant="outline" size="sm" onClick={shareWhatsApp} disabled={sharingWhatsapp}>
+              <MessageCircle className={`h-4 w-4 ${sharingWhatsapp ? 'animate-pulse' : ''}`} />
+              {sharingWhatsapp ? 'מכין...' : 'WhatsApp'}
             </Button>
             <Button variant="outline" size="sm" onClick={shareBitRequest}>
               <Smartphone className="h-4 w-4" />

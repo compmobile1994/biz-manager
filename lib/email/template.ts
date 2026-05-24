@@ -105,7 +105,7 @@ export function buildDocumentEmailHtml(opts: {
             <!-- Body -->
             <tr>
               <td style="padding:32px 24px 16px 24px;font-family:${fontStack};color:#111827;font-size:16px;line-height:1.6;" dir="rtl" align="right">
-                <p style="margin:0 0 16px 0;font-size:18px;font-weight:bold;">שלום,</p>
+                <p style="margin:0 0 16px 0;font-size:18px;font-weight:bold;">שלום ${esc(doc.customer_name_snapshot)},</p>
 
                 <!-- Info box -->
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px 0;border-collapse:separate;" dir="rtl">
