@@ -155,45 +155,53 @@ export function DocumentActions({
     }
     setSharingWhatsapp(true);
 
+    // Clean Hebrew message — NO URL. The PDF goes in as a real attached
+    // file via the Web Share API. Trade-off: the user picks WhatsApp from
+    // the system share sheet (one extra tap) — but the message itself is
+    // pristine.
+    const message =
+      `היי ${customerName},\n` +
+      `מצורפת ${docTitle}\n` +
+      `מ-${businessName}.`;
+
+    // First send → ship the canonical "מקור". Re-send → fresh "נאמן למקור".
+    const isFirstSend = !localSentAt;
+    const sourceUrl = isFirstSend
+      ? pdfUrl                                // direct signed storage URL
+      : `/api/documents/${docId}/pdf-copy`;   // inline "נאמן למקור"
+
     try {
-      // User wants WhatsApp to open instantly with the message ready (no
-      // system share sheet to pick from). We use the wa.me deep link with
-      // the customer's phone + a clean Hebrew message + the PDF URL on
-      // its own line. Trade-off: the receipt comes through as a tappable
-      // link instead of an attached file — but the recipient gets the
-      // exact same PDF, just one extra tap.
-      //
-      // For re-send (already sent once) we want a fresh "נאמן למקור"
-      // URL. The /pdf-copy endpoint generates it inline but the link
-      // expires fast, so we fetch a fresh signed URL via that endpoint
-      // and use the URL it returns. For first-send the canonical
-      // storage signed URL (pdfUrl) is fine.
-      const isFirstSend = !localSentAt;
-      let shareUrl = pdfUrl;
-      if (!isFirstSend) {
-        try {
-          const r = await fetch(`/api/documents/${docId}/pdf-copy`, { method: 'GET' });
-          // The pdf-copy endpoint streams bytes back, not a URL — so for
-          // the link path we stay with the storage URL. (Custom "נאמן
-          // למקור" link would require a new endpoint that returns a
-          // signed URL pointing at an inline-generated blob — out of
-          // scope here.)
-          if (!r.ok) shareUrl = pdfUrl;
-        } catch {
-          shareUrl = pdfUrl;
+      try {
+        const res = await fetch(sourceUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          const asciiType =
+            docType === 'invoice' ? 'Invoice' :
+            docType === 'invoice_receipt' ? 'Invoice-Receipt' :
+            docType === 'credit' ? 'Credit' : 'Kabala';
+          const filename = `${asciiType}-${documentNumber}.pdf`;
+          const file = new File([blob], filename, { type: 'application/pdf' });
+          const navAny = navigator as any;
+          if (navAny.canShare && navAny.canShare({ files: [file] })) {
+            try {
+              await navAny.share({ files: [file], text: message, title: filename });
+              if (isFirstSend) await markSent('whatsapp');
+            } catch (shareErr: any) {
+              if (shareErr?.name !== 'AbortError') throw shareErr;
+            }
+            return;
+          }
         }
+      } catch {
+        // Fall through to the wa.me link below
       }
 
-      const message =
-        `היי ${customerName},\n` +
-        `מצורפת ${docTitle}\n` +
-        `מ-${businessName}.\n\n` +
-        shareUrl;
-
+      // Fallback only when Web Share API isn't available (older browsers
+      // / desktop without it). Still no URL in the message — just a link
+      // on its own line so the recipient can tap.
       const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-      const wa = phone
-        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      const fallbackMsg = encodeURIComponent(message + '\n' + pdfUrl);
+      const wa = phone ? `https://wa.me/${phone}?text=${fallbackMsg}` : `https://wa.me/?text=${fallbackMsg}`;
       window.open(wa, '_blank');
       if (isFirstSend) await markSent('whatsapp');
     } finally {

@@ -62,16 +62,32 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
     }
     setSending(true);
     try {
-      // Fetch a signed PDF URL per document in parallel. The /pdf-url
-      // endpoint returns just JSON {url}, no blob streaming — milliseconds
-      // per call, scales to dozens of receipts without blocking.
+      // Fetch every selected PDF as a Blob in parallel. We use the actual
+      // file content so the share goes out with real attachments — no
+      // URLs in the WhatsApp message body, just a clean Hebrew note +
+      // N PDF files attached.
       const fetchOne = async (id: string) => {
         const doc = docs.find((d) => d.id === id);
         if (!doc) return null;
-        const res = await fetch(`/api/documents/${id}/pdf-url`, { credentials: 'same-origin' });
+        const isFirstSend = !doc.sent_at;
+        const endpoint = isFirstSend
+          ? `/api/documents/${id}/pdf`        // canonical "מקור"
+          : `/api/documents/${id}/pdf-copy`;  // inline "נאמן למקור"
+        const res = await fetch(endpoint, { credentials: 'same-origin' });
         if (!res.ok) throw new Error(`#${doc.number}: ${res.status}`);
-        const { url } = (await res.json()) as { url: string };
-        return { url, isFirstSend: !doc.sent_at, id, number: doc.number };
+        const blob = await res.blob();
+        const asciiType =
+          doc.document_type === 'invoice' ? 'Invoice' :
+          doc.document_type === 'invoice_receipt' ? 'Invoice-Receipt' :
+          doc.document_type === 'credit' ? 'Credit' : 'Kabala';
+        const filename = `${asciiType}-${doc.number}.pdf`;
+        return {
+          file: new File([blob], filename, { type: 'application/pdf' }),
+          url: res.headers.get('x-pdf-url') ?? '',
+          isFirstSend,
+          id,
+          number: doc.number,
+        };
       };
 
       const results = await Promise.allSettled(Array.from(selected).map(fetchOne));
@@ -91,7 +107,8 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return;
       }
 
-      const urls = fetched.map((f) => f.url);
+      const files = fetched.map((f) => f.file);
+      const urls = fetched.map((f) => f.url).filter(Boolean);
       const firstSendIds = fetched.filter((f) => f.isFirstSend).map((f) => f.id);
       const count = fetched.length;
 
@@ -115,16 +132,31 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
       }
 
-      // Direct WhatsApp open via wa.me — no system share sheet picker,
-      // opens straight to the customer's chat with the message + every
-      // PDF link pre-typed. Trade-off: links instead of attached files,
-      // but the recipient gets the same PDFs in one extra tap each.
+      // Try Web Share API with all the files attached — clean message, no
+      // URLs at all. The recipient sees N PDF files in the WhatsApp chat.
+      // User picks WhatsApp from the system share sheet (one extra tap)
+      // and the files attach as a single message.
+      const navAny = navigator as any;
+      const canShareFiles = navAny.canShare && navAny.canShare({ files });
+      if (canShareFiles) {
+        try {
+          await navAny.share({ files, text: message, title: `קבלות מ-${businessName}` });
+          await markFirstSendsAsSent();
+          toast({ title: `${count} קבלות נשלחו` });
+          clearAll();
+          return;
+        } catch (shareErr: any) {
+          if (shareErr?.name === 'AbortError') return;
+        }
+      }
+
+      // Fallback (older browsers / no Web Share): wa.me with links. Not
+      // ideal — we tried hard to avoid it — but better than nothing.
       const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
       const text = encodeURIComponent(message + '\n\n' + urls.join('\n'));
       const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
       window.open(url, '_blank');
       await markFirstSendsAsSent();
-      toast({ title: `${count} קבלות מוכנות לשליחה ב-WhatsApp` });
       clearAll();
     } catch (e: any) {
       if (e?.name === 'AbortError') return;
