@@ -60,14 +60,16 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
     }
     setSending(true);
     try {
-      // Resolve a signed URL for every selected document. We use the existing
-      // regenerate-pdf endpoint? No — we just need the current pdf_url. Fetch
-      // them via the API. Simpler: fetch via our own /api/documents/{id}/pdf-url
-      // endpoint... but that doesn't exist. Use the storage-signed URL the
-      // detail-page server already builds.
-      //
-      // Easiest: hit the storage endpoint via Supabase JS — but that's server-
-      // side. From the client we go through /api/documents/[id]/pdf-blob (new).
+      // First: regenerate every selected PDF as "נאמן למקור" (in parallel).
+      // The customer should always receive a certified-copy version, not
+      // the original "מקור" sitting in storage from issue time. Failures
+      // are non-fatal — we'll just ship whatever's currently in storage.
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          fetch(`/api/documents/${id}/regenerate-pdf`, { method: 'POST' }).catch(() => null),
+        ),
+      );
+
       const files: File[] = [];
       const urls: string[] = [];
       for (const id of selected) {
@@ -75,7 +77,7 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         if (!doc) continue;
         const res = await fetch(`/api/documents/${id}/pdf`, { credentials: 'same-origin' });
         if (!res.ok) {
-          toast({ variant: 'destructive', title: `קבלה #${doc.number} לא נטענה` });
+          toast({ variant: 'destructive', title: `קבלה ${doc.number} לא נטענה` });
           continue;
         }
         const blob = await res.blob();
@@ -161,7 +163,7 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
               <Link href={`/documents/${d.id}`} className="flex-1 flex items-center justify-between">
                 <div>
                   <p className="font-semibold">
-                    {documentTypeLabel[d.document_type]} #{d.number}
+                    {documentTypeLabel[d.document_type]} {d.number}
                     {isCancelled && <span className="text-destructive text-xs mr-2">(בוטל)</span>}
                   </p>
                   <p className="text-xs text-muted-foreground">{formatDate(d.issue_date)}</p>

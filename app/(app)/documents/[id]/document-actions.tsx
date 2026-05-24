@@ -114,7 +114,9 @@ export function DocumentActions({
     }
   }
 
-  const docTitle = `${documentTypeLabel[docType]} #${documentNumber}`;
+  // Plain "קבלה 185" (no # prefix) — user prefers it this way for messages
+  // and toast titles. The PDF itself shows "קבלה מספר 185" in its band.
+  const docTitle = `${documentTypeLabel[docType]} ${documentNumber}`;
 
   async function sendEmail(provider: 'smtp' | 'gmail' | 'resend') {
     if (!emailTo) return toast({ variant: 'destructive', title: 'יש להזין דוא״ל' });
@@ -142,10 +144,21 @@ export function DocumentActions({
       return;
     }
 
+    // Always regenerate as "נאמן למקור" before sharing — the original
+    // (with "מקור" band) is what the customer received at issue time,
+    // any copy we ship now must be marked as a certified true copy.
+    // Best-effort: if regenerate fails for any reason we still ship
+    // whatever's in storage rather than blocking the user.
+    try {
+      await fetch(`/api/documents/${docId}/regenerate-pdf`, { method: 'POST' });
+    } catch {
+      // ignore — fall through to share whatever pdfUrl is
+    }
+
     // Short, clean Hebrew message — no emojis (they render as junk
     // characters in some WhatsApp/SMS receivers), no business name spam,
     // no bank/Bit info (those have their own buttons). docTitle already
-    // contains "קבלה #185" so we don't repeat the number.
+    // contains "קבלה 185" so we don't repeat the number.
     const message =
       `היי ${customerName},\n` +
       `מצורפת ${docTitle}\n` +

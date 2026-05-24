@@ -288,7 +288,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
   <div class="band">
     <div class="date">${dateStr}</div>
     <div class="number">${escapeHtml(docLabel)} מספר ${doc.number ?? '___'}</div>
-    <div class="copy">${copy === 'copy' ? 'העתק' : 'מקור'}</div>
+    <div class="copy">${copy === 'copy' ? 'נאמן למקור' : 'מקור'}</div>
   </div>
 
   <div class="customer">
