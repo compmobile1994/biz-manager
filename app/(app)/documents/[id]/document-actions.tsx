@@ -149,44 +149,69 @@ export function DocumentActions({
 
   async function shareWhatsApp() {
     if (sharingWhatsapp) return; // double-tap guard
+    if (!pdfUrl) {
+      toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
+      return;
+    }
     setSharingWhatsapp(true);
 
+    // Clean Hebrew message — no URL. The PDF goes in as a real attached
+    // file via the Web Share API. Filename in Hebrew per user request
+    // ("קבלה מספר 185.pdf"). If a recipient sees junk we can revert to
+    // ASCII per platform.
+    const message =
+      `היי ${customerName},\n` +
+      `מצורפת ${docTitle}\n` +
+      `מ-${businessName}.`;
+
+    const isFirstSend = !localSentAt;
+    const sourceUrl = isFirstSend
+      ? pdfUrl                                // direct signed storage URL ("מקור")
+      : `/api/documents/${docId}/pdf-copy`;   // inline "נאמן למקור"
+
     try {
-      const isFirstSend = !localSentAt;
-      // Always use wa.me — same flow on phone and desktop, WhatsApp opens
-      // directly to the customer's chat with the message ready. We mint
-      // a short share link so the message body contains ONE clean URL
-      // instead of a huge Supabase signed URL.
+      try {
+        const res = await fetch(sourceUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          // Hebrew filename "קבלה מספר 185.pdf" — user explicitly asked
+          // for the doc type + "מספר" + number wording.
+          const docLabel = documentTypeLabel[docType] ?? 'מסמך';
+          const filename = `${docLabel} מספר ${documentNumber}.pdf`;
+          const file = new File([blob], filename, { type: 'application/pdf' });
+          const navAny = navigator as any;
+          if (navAny.canShare && navAny.canShare({ files: [file] })) {
+            try {
+              await navAny.share({ files: [file], text: message, title: filename });
+              if (isFirstSend) await markSent('whatsapp');
+            } catch (shareErr: any) {
+              if (shareErr?.name !== 'AbortError') throw shareErr;
+            }
+            return;
+          }
+        }
+      } catch {
+        // Fall through to wa.me with short link
+      }
+
+      // Fallback when Web Share API isn't available (most desktop browsers).
+      // Use the short-link path so the message stays compact.
       const linkRes = await fetch('/api/share-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({
-          ids: [docId],
-          copyMode: isFirstSend ? 'original' : 'copy',
-        }),
+        body: JSON.stringify({ ids: [docId], copyMode: isFirstSend ? 'original' : 'copy' }),
       });
-      if (!linkRes.ok) {
-        const j = await linkRes.json().catch(() => ({}));
-        toast({ variant: 'destructive', title: 'שגיאה ביצירת קישור', description: (j as any)?.error ?? '' });
-        return;
+      if (linkRes.ok) {
+        const { url: shortUrl } = (await linkRes.json()) as { url: string };
+        const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+        const fallbackMsg = encodeURIComponent(message + '\n\n' + shortUrl);
+        const wa = phone ? `https://wa.me/${phone}?text=${fallbackMsg}` : `https://wa.me/?text=${fallbackMsg}`;
+        window.open(wa, '_blank');
+        if (isFirstSend) await markSent('whatsapp');
+      } else {
+        toast({ variant: 'destructive', title: 'שגיאה — נסה שוב' });
       }
-      const { url: shortUrl } = (await linkRes.json()) as { url: string };
-
-      const message =
-        `היי ${customerName},\n` +
-        `מצורפת ${docTitle}\n` +
-        `מ-${businessName}.\n\n` +
-        shortUrl;
-
-      const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-      const wa = phone
-        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-        : `https://wa.me/?text=${encodeURIComponent(message)}`;
-      window.open(wa, '_blank');
-      if (isFirstSend) await markSent('whatsapp');
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });
     } finally {
       setSharingWhatsapp(false);
     }

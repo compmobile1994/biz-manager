@@ -69,27 +69,31 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return d && !d.sent_at;
       });
 
-      // Always use wa.me — WhatsApp opens directly on phone AND desktop.
-      // One short link in the message; the link resolves to the merged
-      // PDF on the fly.
-      const linkRes = await fetch('/api/share-links', {
+      // Merge server-side into ONE PDF, then share that single file via
+      // Web Share API. Clean Hebrew message + merged Hebrew-named file.
+      const mergeRes = await fetch('/api/documents/merge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({ ids, copyMode: 'auto' }),
       });
-      if (!linkRes.ok) {
-        const j = await linkRes.json().catch(() => ({}));
-        toast({ variant: 'destructive', title: 'שגיאה ביצירת קישור', description: (j as any)?.error ?? `HTTP ${linkRes.status}` });
+      if (!mergeRes.ok) {
+        const errJson = await mergeRes.json().catch(() => ({}));
+        toast({ variant: 'destructive', title: 'איחוד הקבלות נכשל', description: (errJson as any)?.error ?? `HTTP ${mergeRes.status}` });
         return;
       }
-      const { url: shortUrl } = (await linkRes.json()) as { url: string };
+      const mergedBlob = await mergeRes.blob();
+      // Hebrew filename: "קבלה מספר 185.pdf" for single, "קבלות.pdf" for many.
+      const singleNumber = docs.find((d) => d.id === ids[0])?.number;
+      const filename = count === 1
+        ? `קבלה מספר ${singleNumber}.pdf`
+        : `קבלות.pdf`;
+      const mergedFile = new File([mergedBlob], filename, { type: 'application/pdf' });
 
       const message =
         `היי ${customerName},\n` +
         (count === 1 ? `מצורפת קבלה` : `מצורפות ${count} קבלות`) + `\n` +
-        `מ-${businessName}.\n\n` +
-        shortUrl;
+        `מ-${businessName}.`;
 
       async function markFirstSendsAsSent() {
         if (firstSendIds.length === 0) return;
@@ -106,14 +110,40 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
       }
 
-      const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-      const wa = phone
-        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-        : `https://wa.me/?text=${encodeURIComponent(message)}`;
-      window.open(wa, '_blank');
-      await markFirstSendsAsSent();
-      toast({ title: `${count} קבלות מוכנות לשליחה ב-WhatsApp` });
-      clearAll();
+      const navAny = navigator as any;
+      const canShareFile = navAny.canShare && navAny.canShare({ files: [mergedFile] });
+      if (canShareFile) {
+        try {
+          await navAny.share({ files: [mergedFile], text: message, title: filename });
+          await markFirstSendsAsSent();
+          toast({ title: `${count} קבלות נשלחו` });
+          clearAll();
+          return;
+        } catch (shareErr: any) {
+          if (shareErr?.name === 'AbortError') return;
+        }
+      }
+
+      // Desktop fallback: mint a short link, open WhatsApp Web with msg + link
+      const linkRes = await fetch('/api/share-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ ids, copyMode: 'auto' }),
+      });
+      if (linkRes.ok) {
+        const { url: shortUrl } = (await linkRes.json()) as { url: string };
+        const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+        const wa = phone
+          ? `https://wa.me/${phone}?text=${encodeURIComponent(message + '\n\n' + shortUrl)}`
+          : `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + shortUrl)}`;
+        window.open(wa, '_blank');
+        await markFirstSendsAsSent();
+        toast({ title: `${count} קבלות מוכנות לשליחה ב-WhatsApp` });
+        clearAll();
+      } else {
+        toast({ variant: 'destructive', title: 'שגיאה — נסה שוב' });
+      }
     } catch (e: any) {
       if (e?.name === 'AbortError') return;
       toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });
