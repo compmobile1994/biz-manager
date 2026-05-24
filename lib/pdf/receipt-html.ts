@@ -13,6 +13,7 @@ interface BuildArgs {
     line_total: number;
     phone_number?: string | null;
     imei?: string | null;
+    item_number?: string | null;
     warranty_months?: number | null;
     warranty_provider?: string | null;
     importer_type?: 'official' | 'parallel' | null;
@@ -72,6 +73,10 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
   const renderDesc = (l: BuildArgs['lines'][number]): string => {
     const desc = escapeHtml(l.description);
     const extras: string[] = [];
+    // User-typed identifier (serial / order # / SKU). Distinct from IMEI
+    // which is phone-specific. Always shown first when present so it's the
+    // most prominent secondary info under the description.
+    if (l.item_number) extras.push(`מספר: ${escapeHtml(l.item_number)}`);
     if (l.phone_number) extras.push(`טלפון: ${escapeHtml(l.phone_number)}`);
     if (l.imei) extras.push(`IMEI: ${escapeHtml(l.imei)}`);
     if (l.warranty_months && l.warranty_months > 0) {
@@ -91,6 +96,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
       <table style="width:100%; border-collapse:collapse; font-size:10pt;">
         <thead>
           <tr style="background:${brand}1f;">
+            <th style="padding:8px; text-align:center; font-weight:600; width:40px;">#</th>
             <th style="padding:8px; text-align:right; font-weight:600;">תיאור</th>
             <th style="padding:8px; text-align:center; font-weight:600; width:80px;">כמות</th>
             <th style="padding:8px; text-align:left; font-weight:600; width:100px;">מחיר יח׳</th>
@@ -100,6 +106,7 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
         <tbody>
           ${lines.map((l, i) => `
             <tr style="${i % 2 === 1 ? 'background:#f8fafc;' : ''}">
+              <td style="padding:8px; text-align:center; color:#64748b;">${i + 1}</td>
               <td style="padding:8px;">${renderDesc(l)}</td>
               <td style="padding:8px; text-align:center;">${l.quantity}</td>
               <td style="padding:8px; text-align:left;">${escapeHtml(formatCurrency(l.unit_price))}</td>

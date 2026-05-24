@@ -22,6 +22,7 @@ export interface PreviewLine {
   unit_price: number;
   phone_number?: string;
   imei?: string;
+  item_number?: string;
   warranty_months?: number | null;
   warranty_provider?: string | null;
   importer_type?: 'official' | 'parallel' | null;
@@ -79,6 +80,7 @@ export function DocumentPreview({
 
   function lineExtras(l: PreviewLine): string[] {
     const extras: string[] = [];
+    if (l.item_number) extras.push(`מספר: ${l.item_number}`);
     if (l.phone_number) extras.push(`טלפון: ${l.phone_number}`);
     if (l.imei) extras.push(`IMEI: ${l.imei}`);
     if (l.warranty_months && l.warranty_months > 0) {
@@ -175,6 +177,7 @@ export function DocumentPreview({
           <table className="w-full text-sm">
             <thead>
               <tr style={{ backgroundColor: bandBg }} className="text-right">
+                <th className="px-3 py-2 font-semibold w-10 text-center">#</th>
                 <th className="px-3 py-2 font-semibold">תיאור</th>
                 <th className="px-3 py-2 font-semibold w-20 text-center">כמות</th>
                 <th className="px-3 py-2 font-semibold w-28 text-left">מחיר יח׳</th>
@@ -187,6 +190,7 @@ export function DocumentPreview({
                 const extras = lineExtras(l);
                 return (
                   <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : ''}>
+                    <td className="px-3 py-2 text-center text-slate-500">{i + 1}</td>
                     <td className="px-3 py-2">
                       <div>{l.description}</div>
                       {extras.length > 0 && (

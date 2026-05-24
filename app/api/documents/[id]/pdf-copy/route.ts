@@ -48,6 +48,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         line_total: Number(it.line_total),
         phone_number: it.phone_number ?? null,
         imei: it.imei ?? null,
+        item_number: it.item_number ?? null,
         warranty_months: it.warranty_months ?? null,
         warranty_provider: it.warranty_provider ?? null,
         importer_type: it.importer_type ?? null,

@@ -132,6 +132,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           <table className="w-full text-sm">
             <thead className="bg-muted">
               <tr className="text-right">
+                <th className="p-3 w-10 text-center">#</th>
                 <th className="p-3">תיאור</th>
                 <th className="p-3 w-20">כמות</th>
                 <th className="p-3 w-28">מחיר יח׳</th>
@@ -139,8 +140,9 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               </tr>
             </thead>
             <tbody>
-              {(items ?? []).map((it: any) => {
+              {(items ?? []).map((it: any, idx: number) => {
                 const extras: string[] = [];
+                if (it.item_number) extras.push(`מספר: ${it.item_number}`);
                 if (it.phone_number) extras.push(`טלפון: ${it.phone_number}`);
                 if (it.imei) extras.push(`IMEI: ${it.imei}`);
                 if (it.warranty_months) {
@@ -156,6 +158,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                 }
                 return (
                   <tr key={it.id} className="border-t">
+                    <td className="p-3 text-center text-muted-foreground">{idx + 1}</td>
                     <td className="p-3">
                       <div>{it.description}</div>
                       {extras.length > 0 && (
@@ -171,7 +174,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
             </tbody>
             <tfoot>
               <tr className="border-t-2 font-bold bg-muted/30">
-                <td className="p-3" colSpan={3}>סה״כ</td>
+                <td className="p-3" colSpan={4}>סה״כ</td>
                 <td className="p-3">{formatCurrency(Number(doc.total))}</td>
               </tr>
             </tfoot>

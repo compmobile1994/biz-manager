@@ -88,6 +88,7 @@ export async function POST(request: Request) {
       sort_order: l.sort_order,
       phone_number: l.phone_number ?? null,
       imei: l.imei ?? null,
+      item_number: l.item_number ?? null,
       warranty_months: l.warranty_months ?? null,
       warranty_provider: l.warranty_provider ?? null,
       importer_type: l.importer_type ?? null,

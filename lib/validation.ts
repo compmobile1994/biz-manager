@@ -18,6 +18,9 @@ export const lineSchema = z.object({
     .nullable()
     .optional()
     .or(z.literal('').transform(() => null)),
+  // Generic free-text identifier per line (serial number, order #, SKU, etc).
+  // Separate from IMEI which is digits-only and phone-specific.
+  item_number: z.string().max(40).nullable().optional(),
   warranty_months: z.number().int().min(0).max(120).nullable().optional(),
   warranty_provider: z.string().max(120).nullable().optional(),
   importer_type: z.enum(['official', 'parallel']).nullable().optional(),

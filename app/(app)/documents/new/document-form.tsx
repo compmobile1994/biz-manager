@@ -27,6 +27,7 @@ interface Line {
   unit_price: number;
   phone_number: string;
   imei: string;
+  item_number: string;                // מספר זיהוי חופשי (סיריאלי / מק"ט / הזמנה), נפרד מ-IMEI
   warranty_months: string; // kept as string for input handling, parsed to int on submit
   warranty_provider: string;          // מי נותן את האחריות (טקסט חופשי)
   importer_type: '' | 'official' | 'parallel'; // יבואן רשמי / מקביל
@@ -43,6 +44,7 @@ function emptyLine(): Line {
     unit_price: 0,
     phone_number: '',
     imei: '',
+    item_number: '',
     warranty_months: '',
     warranty_provider: '',
     importer_type: '',
@@ -59,7 +61,7 @@ interface PrefillData {
   customer_email?: string;
   customer_phone?: string;
   notes: string;
-  lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number; phone_number?: string; imei?: string; warranty_months?: number | null; warranty_provider?: string | null; importer_type?: 'official' | 'parallel' | null }[];
+  lines: { saved_item_id: string | null; description: string; quantity: number; unit_price: number; phone_number?: string; imei?: string; item_number?: string; warranty_months?: number | null; warranty_provider?: string | null; importer_type?: 'official' | 'parallel' | null }[];
   payment: {
     method: PaymentMethod;
     card_last4: string;
@@ -137,6 +139,7 @@ export function DocumentForm({
           unit_price: l.unit_price,
           phone_number: l.phone_number ?? '',
           imei: l.imei ?? '',
+          item_number: l.item_number ?? '',
           warranty_months: l.warranty_months ? String(l.warranty_months) : '',
           warranty_provider: l.warranty_provider ?? '',
           importer_type: (l.importer_type ?? '') as Line['importer_type'],
@@ -290,6 +293,7 @@ export function DocumentForm({
             sort_order: i,
             phone_number: l.phone_number?.trim() || null,
             imei: l.imei?.trim() || null,
+            item_number: l.item_number?.trim() || null,
             warranty_months: l.warranty_months && Number(l.warranty_months) > 0 ? Number(l.warranty_months) : null,
             warranty_provider: l.warranty_provider?.trim() || null,
             importer_type: l.importer_type || null,
@@ -361,6 +365,7 @@ export function DocumentForm({
               unit_price: l.unit_price,
               phone_number: l.phone_number,
               imei: l.imei,
+              item_number: l.item_number,
               warranty_months: l.warranty_months ? Number(l.warranty_months) : null,
               warranty_provider: l.warranty_provider,
               importer_type: l.importer_type || null,
@@ -806,7 +811,7 @@ function LineRow({
             </datalist>
           )}
         </div>
-        <div className="md:col-span-6 space-y-1">
+        <div className="md:col-span-4 space-y-1">
           <Label className="text-xs">IMEI (אופציונלי - למכירת מכשיר)</Label>
           <div className="flex gap-2">
             <Input
@@ -821,6 +826,15 @@ function LineRow({
           </div>
         </div>
         <div className="md:col-span-3 space-y-1">
+          <Label className="text-xs">מספר (סיריאלי / מק״ט / הזמנה — אופציונלי)</Label>
+          <Input
+            placeholder="לדוגמה: SN-12345 / הזמנה 78"
+            maxLength={40}
+            value={line.item_number}
+            onChange={(e) => onChange({ item_number: e.target.value })}
+          />
+        </div>
+        <div className="md:col-span-2 space-y-1">
           <Label className="text-xs">אחריות (חודשים)</Label>
           <Input
             type="number"
