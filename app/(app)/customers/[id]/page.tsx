@@ -3,21 +3,31 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { documentTypeLabel, formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { ArrowRight, FileText, Plus } from 'lucide-react';
+import { CustomerDocsBulk } from './customer-docs-bulk';
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
 
+  const { data: { user } } = await supabase.auth.getUser();
   const { data: customer } = await supabase.from('customers').select('*').eq('id', id).maybeSingle();
   if (!customer) notFound();
 
-  const { data: docs } = await supabase
-    .from('documents')
-    .select('*')
-    .eq('customer_id', id)
-    .order('issue_date', { ascending: false });
+  const [{ data: docs }, { data: settings }] = await Promise.all([
+    supabase
+      .from('documents')
+      .select('id, number, document_type, issue_date, total, status')
+      .eq('customer_id', id)
+      .order('issue_date', { ascending: false }),
+    supabase
+      .from('business_settings')
+      .select('business_name')
+      .eq('user_id', user?.id ?? '')
+      .maybeSingle(),
+  ]);
+  const businessName = settings?.business_name ?? 'העסק שלי';
 
   const documents = docs ?? [];
   const docCount = documents.length;
@@ -112,7 +122,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <CardHeader>
           <CardTitle>היסטוריית מסמכים</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className={documents.length === 0 ? 'p-0' : 'p-4'}>
           {documents.length === 0 ? (
             <div className="py-12 px-6 text-center space-y-4">
               <FileText className="h-10 w-10 mx-auto text-muted-foreground" />
@@ -125,34 +135,12 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               </Link>
             </div>
           ) : (
-            <div className="divide-y">
-              {documents.map((d: any) => (
-                <Link
-                  key={d.id}
-                  href={`/documents/${d.id}`}
-                  className="flex items-center justify-between p-4 hover:bg-accent/50"
-                >
-                  <div>
-                    <p className="font-semibold">
-                      {documentTypeLabel[d.document_type]} #{d.number}
-                      {d.status === 'cancelled' && (
-                        <span className="text-destructive text-xs mr-2">(בוטל)</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{formatDate(d.issue_date)}</p>
-                  </div>
-                  <span
-                    className={
-                      d.status === 'cancelled'
-                        ? 'line-through text-muted-foreground'
-                        : 'font-semibold'
-                    }
-                  >
-                    {formatCurrency(Number(d.total))}
-                  </span>
-                </Link>
-              ))}
-            </div>
+            <CustomerDocsBulk
+              docs={documents as any}
+              customerName={customer.name}
+              customerPhone={customer.phone}
+              businessName={businessName}
+            />
           )}
         </CardContent>
       </Card>
