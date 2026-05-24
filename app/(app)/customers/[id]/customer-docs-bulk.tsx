@@ -115,10 +115,19 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return;
       }
       const mergedBlob = await mergeRes.blob();
-      const singleNumber = docs.find((d) => d.id === ids[0])?.number;
+      // Compute the sorted receipt numbers once — used for both the
+      // ASCII filename and the WhatsApp message body.
+      const numbers = ids
+        .map((id) => docs.find((d) => d.id === id)?.number)
+        .filter((n): n is number => typeof n === 'number')
+        .sort((a, b) => a - b);
       // ASCII filename — Hebrew filenames cause Android Chrome's
-      // canShare/share to misbehave silently.
-      const filename = count === 1 ? `Kabala-${singleNumber}.pdf` : `Kabalot-${count}.pdf`;
+      // canShare/share to misbehave silently. Numbers join with "-".
+      //   1 receipt  → "Kabala-185.pdf"
+      //   2+         → "Kabalot-178-186.pdf"
+      const filename = numbers.length === 1
+        ? `Kabala-${numbers[0]}.pdf`
+        : `Kabalot-${numbers.join('-')}.pdf`;
       const mergedFile = new File([mergedBlob], filename, { type: 'application/pdf' });
 
       // User-set exact wording — 3 short lines, with customer name on greeting
@@ -126,10 +135,6 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
       //   1 receipt  → "מצורף קבלה 185"
       //   2 receipts → "מצורף 2 קבלות 178 ו-186"
       //   3+ receipts → "מצורף 3 קבלות 178, 185 ו-186"
-      const numbers = ids
-        .map((id) => docs.find((d) => d.id === id)?.number)
-        .filter((n): n is number => typeof n === 'number')
-        .sort((a, b) => a - b);
       let numbersStr: string;
       if (numbers.length <= 1) {
         numbersStr = numbers[0]?.toString() ?? '';
