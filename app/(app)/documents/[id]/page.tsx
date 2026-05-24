@@ -113,6 +113,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           docTotal={Number(doc.total)}
           customerName={doc.customer_name_snapshot}
           status={doc.status}
+          sentAt={doc.sent_at ?? null}
         />
       </div>
 

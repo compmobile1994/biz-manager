@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Download, Mail, MessageCircle, Send, Phone, RefreshCw, Smartphone, Landmark, Copy, XCircle } from 'lucide-react';
+import { Download, Mail, MessageCircle, Send, RefreshCw, Smartphone, Landmark, Copy, XCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -27,6 +27,7 @@ export function DocumentActions({
   docTotal,
   customerName,
   status,
+  sentAt,
 }: {
   docId: string;
   pdfUrl: string | null;
@@ -43,16 +44,20 @@ export function DocumentActions({
   docTotal: number;
   customerName: string;
   status: string;
+  // null = never sent → first share uses the "מקור" from storage and we
+  // record the timestamp. non-null = re-send → share a fresh "נאמן למקור".
+  sentAt: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [emailDialog, setEmailDialog] = useState(false);
   const [emailTo, setEmailTo] = useState(customerEmail ?? '');
-  const [smsTo, setSmsTo] = useState(customerPhone ?? '');
-  const [smsDialog, setSmsDialog] = useState(false);
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  // Local mirror of sent_at — flipped to "now" on the first successful share
+  // so the next share (in the same session) correctly picks "נאמן למקור".
+  const [localSentAt, setLocalSentAt] = useState<string | null>(sentAt);
   const autoTriggered = useRef(false);
 
   // If we landed here with ?action=whatsapp (set by the "issue + send" button
@@ -149,11 +154,15 @@ export function DocumentActions({
       `מצורפת ${docTitle}\n` +
       `מ-${businessName}.`;
 
-    // Fetch a one-shot "נאמן למקור" copy of the PDF. This endpoint generates
-    // it inline without touching the canonical "מקור" sitting in storage,
-    // so the user can always download the original later.
+    // First send → ship the canonical "מקור" from storage and record it.
+    // Re-send → generate a fresh "נאמן למקור" inline (storage untouched).
+    const isFirstSend = !localSentAt;
+    const sourceUrl = isFirstSend
+      ? `/api/documents/${docId}/pdf`        // serves the stored "מקור"
+      : `/api/documents/${docId}/pdf-copy`;  // inline "נאמן למקור"
+
     try {
-      const res = await fetch(`/api/documents/${docId}/pdf-copy`);
+      const res = await fetch(sourceUrl);
       if (res.ok) {
         const blob = await res.blob();
         // ASCII-only filename — WhatsApp / Android pickers mangle Hebrew.
@@ -166,6 +175,9 @@ export function DocumentActions({
         const navAny = navigator as any;
         if (navAny.canShare && navAny.canShare({ files: [file] })) {
           await navAny.share({ files: [file], text: message, title: filename });
+          // On first send: record that the customer received the original.
+          // Subsequent shares will get a "נאמן למקור" copy.
+          if (isFirstSend) await markSent('whatsapp');
           return;
         }
       }
@@ -180,6 +192,27 @@ export function DocumentActions({
     const msg = encodeURIComponent(message + '\n' + pdfUrl);
     const url = phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`;
     window.open(url, '_blank');
+    if (isFirstSend) await markSent('whatsapp');
+  }
+
+  // Record that the document was sent (first time only). The server-side
+  // unique field is `sent_at`; we only set it if it's still null so we
+  // preserve the original send timestamp across multiple re-sends.
+  async function markSent(via: string) {
+    if (localSentAt) return;
+    try {
+      const supabase = createClient();
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
+        .from('documents')
+        .update({ sent_at: nowIso, sent_via: via })
+        .eq('id', docId)
+        .is('sent_at', null); // race-safe: only the first call wins
+      if (!error) setLocalSentAt(nowIso);
+    } catch {
+      // Non-fatal — re-send logic just won't switch to "נאמן למקור" until
+      // the user reloads the page.
+    }
   }
 
   function shareBitRequest() {
@@ -246,14 +279,8 @@ export function DocumentActions({
     window.open(url, '_blank');
   }
 
-  async function sendSms() {
-    if (!smsTo) return toast({ variant: 'destructive', title: 'יש להזין מספר טלפון' });
-    if (!pdfUrl) return toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
-    const msg = `${docTitle} מ-${businessName}: ${pdfUrl}`;
-    const url = `sms:${smsTo}?&body=${encodeURIComponent(msg)}`;
-    window.location.href = url;
-    setSmsDialog(false);
-  }
+  // SMS send was removed at the user's request — WhatsApp covers their
+  // use case and SMS doesn't support file attachments anyway, only links.
 
   const isCancelled = status === 'cancelled';
 
@@ -296,10 +323,6 @@ export function DocumentActions({
             <Button variant="outline" size="sm" onClick={shareBankTransferRequest}>
               <Landmark className="h-4 w-4" />
               בקשת העברה
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setSmsDialog(true)}>
-              <Phone className="h-4 w-4" />
-              SMS
             </Button>
           </>
         )}
@@ -352,26 +375,6 @@ export function DocumentActions({
         </div>
       )}
 
-      {smsDialog && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setSmsDialog(false)}>
-          <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <CardContent className="py-6 space-y-4">
-              <h3 className="font-bold text-lg">שליחה ב-SMS</h3>
-              <div className="space-y-1.5">
-                <Label>מספר טלפון</Label>
-                <Input type="tel" value={smsTo} onChange={(e) => setSmsTo(e.target.value)} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                ייפתח אפליקציית ההודעות במכשיר עם הטקסט מוכן לשליחה.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setSmsDialog(false)}>ביטול</Button>
-                <Button onClick={sendSms}>פתח SMS</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </>
   );
 }

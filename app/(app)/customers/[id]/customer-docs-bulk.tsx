@@ -6,6 +6,7 @@ import { Send, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { documentTypeLabel, formatCurrency, formatDate } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 
 interface DocRow {
   id: string;
@@ -14,6 +15,7 @@ interface DocRow {
   issue_date: string;
   total: number;
   status: string;
+  sent_at: string | null;
 }
 
 interface Props {
@@ -60,21 +62,25 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
     }
     setSending(true);
     try {
-      // Fetch a fresh "נאמן למקור" copy for every selected document. The
-      // /pdf-copy endpoint generates the certified-copy version inline
-      // without touching the canonical "מקור" in storage — so the user's
-      // original is preserved and the customer always gets a certified
-      // copy.
+      // Per-document: first send ships the canonical "מקור"; subsequent
+      // sends ship a freshly-generated "נאמן למקור". After share success
+      // we mark sent_at for any docs that were never sent before.
       const files: File[] = [];
       const urls: string[] = [];
+      const firstSendIds: string[] = [];
       for (const id of selected) {
         const doc = docs.find((d) => d.id === id);
         if (!doc) continue;
-        const res = await fetch(`/api/documents/${id}/pdf-copy`, { credentials: 'same-origin' });
+        const isFirstSend = !doc.sent_at;
+        const endpoint = isFirstSend
+          ? `/api/documents/${id}/pdf`        // serves the stored "מקור"
+          : `/api/documents/${id}/pdf-copy`;  // inline "נאמן למקור"
+        const res = await fetch(endpoint, { credentials: 'same-origin' });
         if (!res.ok) {
           toast({ variant: 'destructive', title: `קבלה ${doc.number} לא נטענה` });
           continue;
         }
+        if (isFirstSend) firstSendIds.push(id);
         const blob = await res.blob();
         // ASCII-only filename — WhatsApp / Android file picker mangle
         // Hebrew chars in attachment names. Keep it simple: receipt-180.pdf.
@@ -93,9 +99,25 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         `מצורפות ${files.length} קבלות\n` +
         `מ-${businessName}.`;
 
+      async function markFirstSendsAsSent() {
+        if (firstSendIds.length === 0) return;
+        try {
+          const supabase = createClient();
+          const nowIso = new Date().toISOString();
+          await supabase
+            .from('documents')
+            .update({ sent_at: nowIso, sent_via: 'whatsapp' })
+            .in('id', firstSendIds)
+            .is('sent_at', null); // only flip docs that were never sent
+        } catch {
+          // non-fatal
+        }
+      }
+
       const navAny = navigator as any;
       if (files.length > 0 && navAny.canShare && navAny.canShare({ files })) {
         await navAny.share({ files, text: message, title: `קבלות מ-${businessName}` });
+        await markFirstSendsAsSent();
         toast({ title: `${files.length} קבלות נשלחו` });
         clearAll();
         return;
@@ -106,6 +128,7 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
       const text = encodeURIComponent(message + '\n\n' + urls.join('\n'));
       const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
       window.open(url, '_blank');
+      await markFirstSendsAsSent();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });
     } finally {

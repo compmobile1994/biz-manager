@@ -18,7 +18,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const [{ data: docs }, { data: settings }] = await Promise.all([
     supabase
       .from('documents')
-      .select('id, number, document_type, issue_date, total, status')
+      .select('id, number, document_type, issue_date, total, status, sent_at')
       .eq('customer_id', id)
       .order('issue_date', { ascending: false }),
     supabase
