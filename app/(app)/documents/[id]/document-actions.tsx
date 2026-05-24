@@ -172,37 +172,45 @@ export function DocumentActions({
       : `/api/documents/${docId}/pdf-copy`;   // inline "נאמן למקור"
 
     try {
-      try {
-        const res = await fetch(sourceUrl);
-        if (res.ok) {
+      // Try the Web Share API first (mobile). On phones we NEVER fall back
+      // to wa.me + URL — the user explicitly wants a clean message + file.
+      // If share fails for any reason (other than user cancel), we surface
+      // a toast and stop, instead of silently dropping a public link in
+      // the message body.
+      const navAny = navigator as any;
+      const hasShare = typeof navAny.share === 'function';
+
+      if (hasShare) {
+        try {
+          const res = await fetch(sourceUrl);
+          if (!res.ok) throw new Error(`PDF fetch failed (HTTP ${res.status})`);
           const blob = await res.blob();
-          // ASCII filename — Hebrew filenames cause Android Chrome's
-          // canShare() to return false (silently!), which would drop us
-          // into the wa.me + URL fallback. ASCII keeps the file going as
-          // a real attachment so the message stays clean.
+          // ASCII filename — Hebrew filenames make Android Chrome's
+          // canShare/share misbehave. The PDF body still has "קבלה מספר N"
+          // visible inside, so the receipt is clearly identified once opened.
           const asciiType =
             docType === 'invoice' ? 'Invoice' :
             docType === 'invoice_receipt' ? 'Invoice-Receipt' :
             docType === 'credit' ? 'Credit' : 'Kabala';
           const filename = `${asciiType}-${documentNumber}.pdf`;
           const file = new File([blob], filename, { type: 'application/pdf' });
-          const navAny = navigator as any;
-          if (navAny.canShare && navAny.canShare({ files: [file] })) {
-            try {
-              await navAny.share({ files: [file], text: message, title: filename });
-              if (isFirstSend) await markSent('whatsapp');
-            } catch (shareErr: any) {
-              if (shareErr?.name !== 'AbortError') throw shareErr;
-            }
-            return;
-          }
+          await navAny.share({ files: [file], text: message, title: filename });
+          if (isFirstSend) await markSent('whatsapp');
+          return;
+        } catch (shareErr: any) {
+          if (shareErr?.name === 'AbortError') return; // user dismissed
+          toast({
+            variant: 'destructive',
+            title: 'השיתוף נכשל',
+            description: shareErr?.message ?? shareErr?.name ?? 'נסה שוב',
+          });
+          return;
         }
-      } catch {
-        // Fall through to wa.me with short link
       }
 
-      // Fallback when Web Share API isn't available (most desktop browsers).
-      // Use the short-link path so the message stays compact.
+      // Desktop fallback (no Web Share API): mint a short link and open
+      // WhatsApp Web. This path contains a URL — it's the only way to
+      // get the PDF to the recipient when there's no share sheet.
       const linkRes = await fetch('/api/share-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

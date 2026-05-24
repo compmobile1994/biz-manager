@@ -110,9 +110,20 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
       }
 
+      // Mobile path: use Web Share API to attach the real PDF.
+      // Two important changes vs. the previous version:
+      //   1. We try `share()` directly without consulting `canShare()` first —
+      //      Android Chrome's canShare has false-negative quirks (returns
+      //      false even for valid file shares), and skipping it lets share()
+      //      itself decide. If the device truly doesn't support file share,
+      //      it'll throw a TypeError we surface clearly.
+      //   2. On ANY failure here, we DO NOT silently fall back to wa.me + URL.
+      //      The user explicitly doesn't want a URL in the message on phone.
+      //      Instead we show an error toast so they know to retry.
       const navAny = navigator as any;
-      const canShareFile = navAny.canShare && navAny.canShare({ files: [mergedFile] });
-      if (canShareFile) {
+      const hasShare = typeof navAny.share === 'function';
+
+      if (hasShare) {
         try {
           await navAny.share({ files: [mergedFile], text: message, title: filename });
           await markFirstSendsAsSent();
@@ -120,11 +131,19 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
           clearAll();
           return;
         } catch (shareErr: any) {
-          if (shareErr?.name === 'AbortError') return;
+          if (shareErr?.name === 'AbortError') return; // user dismissed the share sheet
+          toast({
+            variant: 'destructive',
+            title: 'השיתוף נכשל',
+            description: shareErr?.message ?? shareErr?.name ?? 'נסה שוב',
+          });
+          return;
         }
       }
 
-      // Desktop fallback: mint a short link, open WhatsApp Web with msg + link
+      // Desktop fallback (no Web Share API at all): mint a short link, open
+      // WhatsApp Web. This path intentionally contains the URL — it's the
+      // only way to ship the PDF when there's no share sheet.
       const linkRes = await fetch('/api/share-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
