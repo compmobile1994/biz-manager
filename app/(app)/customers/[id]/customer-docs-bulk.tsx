@@ -79,7 +79,13 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
           continue;
         }
         const blob = await res.blob();
-        const filename = `${documentTypeLabel[doc.document_type] ?? 'מסמך'}-${doc.number}.pdf`;
+        // ASCII-only filename — WhatsApp / Android file picker mangle
+        // Hebrew chars in attachment names. Keep it simple: receipt-180.pdf.
+        const asciiType =
+          doc.document_type === 'invoice' ? 'invoice' :
+          doc.document_type === 'invoice_receipt' ? 'invoice-receipt' :
+          doc.document_type === 'credit' ? 'credit' : 'receipt';
+        const filename = `${asciiType}-${doc.number}.pdf`;
         files.push(new File([blob], filename, { type: 'application/pdf' }));
         const signedUrl = res.headers.get('x-pdf-url');
         if (signedUrl) urls.push(signedUrl);

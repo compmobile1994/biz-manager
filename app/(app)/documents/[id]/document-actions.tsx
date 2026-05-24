@@ -156,7 +156,16 @@ export function DocumentActions({
       const res = await fetch(pdfUrl);
       if (res.ok) {
         const blob = await res.blob();
-        const filename = `${docTitle.replace(/[\\/:*?"<>|]/g, '')}-${documentNumber}.pdf`;
+        // ASCII-only filename for the shared file — WhatsApp + some Android/
+        // iOS file pickers mangle Hebrew characters in attachment names,
+        // making the file look like gibberish to the recipient.
+        // The user can still see the doc type + number; the Hebrew context
+        // goes in the share `text` instead.
+        const asciiType =
+          docType === 'invoice' ? 'invoice' :
+          docType === 'invoice_receipt' ? 'invoice-receipt' :
+          docType === 'credit' ? 'credit' : 'receipt';
+        const filename = `${asciiType}-${documentNumber}.pdf`;
         const file = new File([blob], filename, { type: 'application/pdf' });
         const navAny = navigator as any;
         if (navAny.canShare && navAny.canShare({ files: [file] })) {
