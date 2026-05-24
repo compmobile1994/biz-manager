@@ -69,31 +69,27 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return d && !d.sent_at;
       });
 
-      // Merge all selected PDFs into ONE file server-side, then share that
-      // single file via Web Share API. Clean message body (no URLs at all)
-      // + single attached PDF.
-      const mergeRes = await fetch('/api/documents/merge', {
+      // Always use wa.me — WhatsApp opens directly on phone AND desktop.
+      // One short link in the message; the link resolves to the merged
+      // PDF on the fly.
+      const linkRes = await fetch('/api/share-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({ ids, copyMode: 'auto' }),
       });
-      if (!mergeRes.ok) {
-        const errJson = await mergeRes.json().catch(() => ({}));
-        toast({ variant: 'destructive', title: 'איחוד הקבלות נכשל', description: (errJson as any)?.error ?? `HTTP ${mergeRes.status}` });
+      if (!linkRes.ok) {
+        const j = await linkRes.json().catch(() => ({}));
+        toast({ variant: 'destructive', title: 'שגיאה ביצירת קישור', description: (j as any)?.error ?? `HTTP ${linkRes.status}` });
         return;
       }
-      const mergedBlob = await mergeRes.blob();
-      const mergedFile = new File(
-        [mergedBlob],
-        count === 1 ? `Kabala-${docs.find((d) => d.id === ids[0])?.number ?? ''}.pdf` : `Kabalot-${count}.pdf`,
-        { type: 'application/pdf' },
-      );
+      const { url: shortUrl } = (await linkRes.json()) as { url: string };
 
       const message =
         `היי ${customerName},\n` +
         (count === 1 ? `מצורפת קבלה` : `מצורפות ${count} קבלות`) + `\n` +
-        `מ-${businessName}.`;
+        `מ-${businessName}.\n\n` +
+        shortUrl;
 
       async function markFirstSendsAsSent() {
         if (firstSendIds.length === 0) return;
@@ -110,31 +106,13 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
       }
 
-      const navAny = navigator as any;
-      const canShareFile = navAny.canShare && navAny.canShare({ files: [mergedFile] });
-      if (canShareFile) {
-        try {
-          await navAny.share({ files: [mergedFile], text: message, title: `קבלות מ-${businessName}` });
-          await markFirstSendsAsSent();
-          toast({ title: `${count} קבלות נשלחו` });
-          clearAll();
-          return;
-        } catch (shareErr: any) {
-          if (shareErr?.name === 'AbortError') return;
-        }
-      }
-
-      // Fallback when Web Share API isn't available (desktop browsers).
-      // Download the merged file so the user can attach it manually in
-      // WhatsApp Web.
-      const objUrl = URL.createObjectURL(mergedBlob);
-      const a = document.createElement('a');
-      a.href = objUrl;
-      a.download = mergedFile.name;
-      a.click();
-      URL.revokeObjectURL(objUrl);
+      const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+      const wa = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(wa, '_blank');
       await markFirstSendsAsSent();
-      toast({ title: 'הקובץ הורד — צרף אותו ידנית ל-WhatsApp' });
+      toast({ title: `${count} קבלות מוכנות לשליחה ב-WhatsApp` });
       clearAll();
     } catch (e: any) {
       if (e?.name === 'AbortError') return;
