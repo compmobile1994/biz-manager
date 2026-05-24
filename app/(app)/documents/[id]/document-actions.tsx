@@ -165,10 +165,16 @@ export function DocumentActions({
       const res = await fetch(sourceUrl);
       if (res.ok) {
         const blob = await res.blob();
-        // Hebrew filename — "קבלה 185.pdf" etc. Modern Android Chrome +
-        // WhatsApp handle UTF-8 filenames fine. If a specific recipient
-        // sees junk we can swap back to ASCII.
-        const filename = `${docTitle}.pdf`;
+        // ASCII filename — WhatsApp doesn't render Hebrew attachment names
+        // reliably across all clients. We tried "קבלה 185.pdf" — it came
+        // through as junk for the user. The Hebrew context goes in the
+        // share `text` instead; the filename just needs to be readable
+        // enough to identify the doc.
+        const asciiType =
+          docType === 'invoice' ? 'Invoice' :
+          docType === 'invoice_receipt' ? 'Invoice-Receipt' :
+          docType === 'credit' ? 'Credit' : 'Kabala';
+        const filename = `${asciiType}-${documentNumber}.pdf`;
         const file = new File([blob], filename, { type: 'application/pdf' });
         const navAny = navigator as any;
         if (navAny.canShare && navAny.canShare({ files: [file] })) {
