@@ -21,11 +21,13 @@ export function ExpensesClient({
   categories: initialCategories,
   vendors,
   vendorCategoryMap,
+  supplierIdByName,
 }: {
   initialExpenses: Expense[];
   categories: ExpenseCategory[];
   vendors: string[];
   vendorCategoryMap: Record<string, string>;
+  supplierIdByName: Record<string, string>;
 }) {
   const supabase = createClient();
   const { toast } = useToast();
@@ -142,10 +144,30 @@ export function ExpensesClient({
         receipt_url = path;
       }
 
+      // Auto-link to a saved supplier when the vendor name matches one we
+      // already have. If the user typed a brand-new vendor, create a
+      // supplier row on the fly so the name appears on the suppliers page
+      // immediately. The plain text `vendor` field is kept as a snapshot.
+      const vendorName = (editing.vendor ?? '').trim();
+      let supplier_id: string | null = supplierIdByName[vendorName] ?? null;
+      if (!supplier_id && vendorName) {
+        const { data: newSup, error: supErr } = await supabase
+          .from('suppliers')
+          .insert({ user_id: user.id, name: vendorName })
+          .select('id')
+          .single();
+        if (!supErr && newSup) {
+          supplier_id = newSup.id;
+          supplierIdByName[vendorName] = newSup.id; // local-only cache
+        }
+        // Non-fatal if the supplier insert fails — the expense still saves.
+      }
+
       const payload: any = {
         user_id: user.id,
         expense_date: editing.expense_date,
         vendor: editing.vendor,
+        supplier_id,
         category_id: editing.category_id ?? null,
         amount: Math.round(Number(editing.amount)), // integer shekels — matches receipts
         description: editing.description ?? null,

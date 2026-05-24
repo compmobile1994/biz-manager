@@ -108,12 +108,25 @@ export interface Expense {
   user_id: string;
   expense_date: string;
   vendor: string;
+  supplier_id: string | null;
   category_id: string | null;
   amount: number;
   description: string | null;
   payment_method: PaymentMethod | null;
   reference: string | null;
   receipt_url: string | null;
+}
+
+export interface Supplier {
+  id: string;
+  user_id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  tax_id: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
 export type Database = {
@@ -127,6 +140,7 @@ export type Database = {
       payments: { Row: Payment; Insert: Omit<Payment, 'id'> & { id?: string }; Update: Partial<Payment> };
       expense_categories: { Row: ExpenseCategory; Insert: Omit<ExpenseCategory, 'id'> & { id?: string }; Update: Partial<ExpenseCategory> };
       expenses: { Row: Expense; Insert: Omit<Expense, 'id'> & { id?: string }; Update: Partial<Expense> };
+      suppliers: { Row: Supplier; Insert: Omit<Supplier, 'id' | 'created_at'> & { id?: string }; Update: Partial<Supplier> };
     };
     Functions: {
       next_document_number: { Args: { p_type: DocumentType }; Returns: number };
