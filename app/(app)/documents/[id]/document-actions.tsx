@@ -165,12 +165,10 @@ export function DocumentActions({
       const res = await fetch(sourceUrl);
       if (res.ok) {
         const blob = await res.blob();
-        // ASCII-only filename — WhatsApp / Android pickers mangle Hebrew.
-        const asciiType =
-          docType === 'invoice' ? 'invoice' :
-          docType === 'invoice_receipt' ? 'invoice-receipt' :
-          docType === 'credit' ? 'credit' : 'receipt';
-        const filename = `${asciiType}-${documentNumber}.pdf`;
+        // Hebrew filename — "קבלה 185.pdf" etc. Modern Android Chrome +
+        // WhatsApp handle UTF-8 filenames fine. If a specific recipient
+        // sees junk we can swap back to ASCII.
+        const filename = `${docTitle}.pdf`;
         const file = new File([blob], filename, { type: 'application/pdf' });
         const navAny = navigator as any;
         if (navAny.canShare && navAny.canShare({ files: [file] })) {

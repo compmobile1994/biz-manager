@@ -82,13 +82,10 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         }
         if (isFirstSend) firstSendIds.push(id);
         const blob = await res.blob();
-        // ASCII-only filename — WhatsApp / Android file picker mangle
-        // Hebrew chars in attachment names. Keep it simple: receipt-180.pdf.
-        const asciiType =
-          doc.document_type === 'invoice' ? 'invoice' :
-          doc.document_type === 'invoice_receipt' ? 'invoice-receipt' :
-          doc.document_type === 'credit' ? 'credit' : 'receipt';
-        const filename = `${asciiType}-${doc.number}.pdf`;
+        // Hebrew filename — "קבלה 185.pdf". Modern Android/iOS WhatsApp
+        // handle UTF-8 attachment names; if a recipient sees junk we can
+        // fall back to ASCII.
+        const filename = `${documentTypeLabel[doc.document_type] ?? 'מסמך'} ${doc.number}.pdf`;
         files.push(new File([blob], filename, { type: 'application/pdf' }));
         const signedUrl = res.headers.get('x-pdf-url');
         if (signedUrl) urls.push(signedUrl);
