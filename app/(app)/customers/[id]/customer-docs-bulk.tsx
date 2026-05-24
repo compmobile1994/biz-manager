@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Send, CheckSquare, Square } from 'lucide-react';
+import { Send, CheckSquare, Square, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { documentTypeLabel, formatCurrency, formatDate } from '@/lib/utils';
@@ -27,15 +27,30 @@ interface Props {
 
 // Bulk-send UI for the customer detail page.
 //
-// Lets the user tick multiple receipts of THIS customer and ship them all
-// at once via WhatsApp using the Web Share API (which supports multiple
-// File objects in a single share() call). Falls back to a wa.me link that
-// lists all the PDF URLs if Web Share isn't available (older browsers /
-// non-PWA Chrome on desktop).
+// Two-step flow because of Web Share API gesture constraints:
+//   Step 1 (אסוף ושלח): the user clicks the prepare button. We merge the
+//     selected receipts server-side into a single PDF and store it in
+//     state along with the message text. NO call to navigator.share here.
+//   Step 2 (שתף עכשיו): the prepared button replaces the prepare button.
+//     The user clicks it and we call navigator.share() synchronously from
+//     the click handler — no awaits, so the browser still sees this as
+//     "handling a user gesture" and actually opens the share sheet.
+//
+// We can't do this in one click because the merge fetch takes a few
+// hundred ms and Chrome on Android rejects share() if there's any async
+// gap between the click and the share() call.
 export function CustomerDocsBulk({ docs, customerName, customerPhone, businessName }: Props) {
   const { toast } = useToast();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [sending, setSending] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [prepared, setPrepared] = useState<{
+    file: File;
+    message: string;
+    filename: string;
+    ids: string[];
+    firstSendIds: string[];
+    count: number;
+  } | null>(null);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -44,23 +59,43 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
       else next.add(id);
       return next;
     });
+    // Selection changed — invalidate any previously-prepared bundle so we
+    // don't share an outdated set of receipts.
+    setPrepared(null);
   }
 
   function selectAll() {
-    // Only documents that aren't cancelled (cancelled receipts shouldn't be re-sent)
     const all = docs.filter((d) => d.status !== 'cancelled').map((d) => d.id);
     setSelected(new Set(all));
+    setPrepared(null);
   }
   function clearAll() {
     setSelected(new Set());
+    setPrepared(null);
   }
 
-  async function shareSelected() {
+  async function markFirstSendsAsSent(firstSendIds: string[]) {
+    if (firstSendIds.length === 0) return;
+    try {
+      const supabase = createClient();
+      const nowIso = new Date().toISOString();
+      await supabase
+        .from('documents')
+        .update({ sent_at: nowIso, sent_via: 'whatsapp' })
+        .in('id', firstSendIds)
+        .is('sent_at', null);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  // STEP 1: merge server-side and stash the file in state.
+  async function prepareSelected() {
     if (selected.size === 0) {
       toast({ variant: 'destructive', title: 'לא נבחרו קבלות' });
       return;
     }
-    setSending(true);
+    setPreparing(true);
     try {
       const ids = Array.from(selected);
       const count = ids.length;
@@ -69,8 +104,6 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return d && !d.sent_at;
       });
 
-      // Merge server-side into ONE PDF, then share that single file via
-      // Web Share API. Clean Hebrew message + merged Hebrew-named file.
       const mergeRes = await fetch('/api/documents/merge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,9 +116,6 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         return;
       }
       const mergedBlob = await mergeRes.blob();
-      // ASCII filename — Hebrew filenames cause Android Chrome's canShare()
-      // to return false (silently!), which would drop us into the wa.me +
-      // URL fallback. ASCII keeps the file going as a real attachment.
       const singleNumber = docs.find((d) => d.id === ids[0])?.number;
       const filename = count === 1 ? `Kabala-${singleNumber}.pdf` : `Kabalot-${count}.pdf`;
       const mergedFile = new File([mergedBlob], filename, { type: 'application/pdf' });
@@ -95,80 +125,66 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         (count === 1 ? `מצורפת קבלה` : `מצורפות ${count} קבלות`) + `\n` +
         `מ-${businessName}.`;
 
-      async function markFirstSendsAsSent() {
-        if (firstSendIds.length === 0) return;
-        try {
-          const supabase = createClient();
-          const nowIso = new Date().toISOString();
-          await supabase
-            .from('documents')
-            .update({ sent_at: nowIso, sent_via: 'whatsapp' })
-            .in('id', firstSendIds)
-            .is('sent_at', null);
-        } catch {
-          // non-fatal
-        }
-      }
+      setPrepared({ file: mergedFile, message, filename, ids, firstSendIds, count });
 
-      // Mobile path: use Web Share API to attach the real PDF.
-      // Two important changes vs. the previous version:
-      //   1. We try `share()` directly without consulting `canShare()` first —
-      //      Android Chrome's canShare has false-negative quirks (returns
-      //      false even for valid file shares), and skipping it lets share()
-      //      itself decide. If the device truly doesn't support file share,
-      //      it'll throw a TypeError we surface clearly.
-      //   2. On ANY failure here, we DO NOT silently fall back to wa.me + URL.
-      //      The user explicitly doesn't want a URL in the message on phone.
-      //      Instead we show an error toast so they know to retry.
+      // If this device has no Web Share API at all (desktop), bypass the
+      // 2-click pattern entirely — there's nothing to share to anyway.
+      // Mint a short link and pop WhatsApp Web like before.
       const navAny = navigator as any;
-      const hasShare = typeof navAny.share === 'function';
-
-      if (hasShare) {
-        try {
-          await navAny.share({ files: [mergedFile], text: message, title: filename });
-          await markFirstSendsAsSent();
-          toast({ title: `${count} קבלות נשלחו` });
+      if (typeof navAny.share !== 'function') {
+        const linkRes = await fetch('/api/share-links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ ids, copyMode: 'auto' }),
+        });
+        if (linkRes.ok) {
+          const { url: shortUrl } = (await linkRes.json()) as { url: string };
+          const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+          const wa = phone
+            ? `https://wa.me/${phone}?text=${encodeURIComponent(message + '\n\n' + shortUrl)}`
+            : `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + shortUrl)}`;
+          window.open(wa, '_blank');
+          await markFirstSendsAsSent(firstSendIds);
+          toast({ title: `${count} קבלות מוכנות לשליחה ב-WhatsApp` });
+          setPrepared(null);
           clearAll();
-          return;
-        } catch (shareErr: any) {
-          if (shareErr?.name === 'AbortError') return; // user dismissed the share sheet
-          toast({
-            variant: 'destructive',
-            title: 'השיתוף נכשל',
-            description: shareErr?.message ?? shareErr?.name ?? 'נסה שוב',
-          });
-          return;
+        } else {
+          toast({ variant: 'destructive', title: 'שגיאה — נסה שוב' });
         }
-      }
-
-      // Desktop fallback (no Web Share API at all): mint a short link, open
-      // WhatsApp Web. This path intentionally contains the URL — it's the
-      // only way to ship the PDF when there's no share sheet.
-      const linkRes = await fetch('/api/share-links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ ids, copyMode: 'auto' }),
-      });
-      if (linkRes.ok) {
-        const { url: shortUrl } = (await linkRes.json()) as { url: string };
-        const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-        const wa = phone
-          ? `https://wa.me/${phone}?text=${encodeURIComponent(message + '\n\n' + shortUrl)}`
-          : `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + shortUrl)}`;
-        window.open(wa, '_blank');
-        await markFirstSendsAsSent();
-        toast({ title: `${count} קבלות מוכנות לשליחה ב-WhatsApp` });
-        clearAll();
       } else {
-        toast({ variant: 'destructive', title: 'שגיאה — נסה שוב' });
+        // Mobile — tell the user to tap the green "שתף עכשיו" button now
+        toast({ title: 'מוכן — לחץ "שתף עכשיו"' });
       }
     } catch (e: any) {
-      if (e?.name === 'AbortError') return;
       toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });
     } finally {
-      setSending(false);
+      setPreparing(false);
     }
+  }
+
+  // STEP 2: synchronous click handler — no awaits before share(). This is
+  // what makes Chrome on Android happy: it sees the share() call as being
+  // inside an active user gesture and actually opens the share sheet.
+  function shareNow() {
+    if (!prepared) return;
+    const { file, message, filename, firstSendIds, count } = prepared;
+    const navAny = navigator as any;
+    navAny.share({ files: [file], text: message, title: filename })
+      .then(async () => {
+        await markFirstSendsAsSent(firstSendIds);
+        toast({ title: `${count} קבלות נשלחו` });
+        setPrepared(null);
+        clearAll();
+      })
+      .catch((shareErr: any) => {
+        if (shareErr?.name === 'AbortError') return; // user closed sheet
+        toast({
+          variant: 'destructive',
+          title: 'השיתוף נכשל',
+          description: shareErr?.message ?? shareErr?.name ?? 'נסה שוב',
+        });
+      });
   }
 
   const eligibleCount = docs.filter((d) => d.status !== 'cancelled').length;
@@ -188,15 +204,29 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
             נקה
           </Button>
         )}
-        <Button
-          size="sm"
-          onClick={shareSelected}
-          disabled={sending || selected.size === 0}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          <Send className="h-4 w-4" />
-          {sending ? 'שולח...' : `שלח ${selected.size > 0 ? selected.size + ' ' : ''}קבלות ב-WhatsApp`}
-        </Button>
+        {prepared ? (
+          // STEP 2 BUTTON — synchronous click → share()
+          <Button
+            size="sm"
+            onClick={shareNow}
+            className="bg-green-600 hover:bg-green-700 animate-pulse"
+            title="לחץ עכשיו כדי לפתוח את WhatsApp"
+          >
+            <Share2 className="h-4 w-4" />
+            שתף עכשיו ({prepared.count})
+          </Button>
+        ) : (
+          // STEP 1 BUTTON — prepare merge
+          <Button
+            size="sm"
+            onClick={prepareSelected}
+            disabled={preparing || selected.size === 0}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Send className="h-4 w-4" />
+            {preparing ? 'מכין...' : `הכן ${selected.size > 0 ? selected.size + ' ' : ''}קבלות לשליחה`}
+          </Button>
+        )}
       </div>
 
       <div className="divide-y border rounded-md">

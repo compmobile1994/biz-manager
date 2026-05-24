@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Download, Mail, MessageCircle, Send, RefreshCw, Smartphone, Landmark, Copy, XCircle } from 'lucide-react';
+import { Download, Mail, MessageCircle, Send, RefreshCw, Smartphone, Landmark, Copy, XCircle, Share2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -59,6 +59,16 @@ export function DocumentActions({
   // button disables instantly on tap — user feedback that the share is
   // actually being prepared (PDF fetch can take a second or two).
   const [sharingWhatsapp, setSharingWhatsapp] = useState(false);
+  // Two-step prep for Web Share. After step 1 the PDF blob is stashed
+  // here; the green "שתף עכשיו" button calls share() synchronously from
+  // its click handler so the browser doesn't reject for losing the user
+  // gesture across our network fetch.
+  const [preparedShare, setPreparedShare] = useState<{
+    file: File;
+    message: string;
+    filename: string;
+    wasFirstSend: boolean;
+  } | null>(null);
   // Local mirror of sent_at — flipped to "now" on the first successful share
   // so the next share (in the same session) correctly picks "נאמן למקור".
   const [localSentAt, setLocalSentAt] = useState<string | null>(sentAt);
@@ -75,7 +85,7 @@ export function DocumentActions({
     // Strip the ?action=whatsapp so a refresh doesn't fire it again
     router.replace(`/documents/${docId}`);
     // Slight delay so the UI settles before the popup
-    setTimeout(() => shareWhatsApp(), 300);
+    setTimeout(() => prepareShare(), 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfUrl, searchParams]);
 
@@ -147,20 +157,17 @@ export function DocumentActions({
     }
   }
 
-  async function shareWhatsApp() {
-    if (sharingWhatsapp) return; // double-tap guard
+  // STEP 1: fetch the PDF and stash it. No call to navigator.share() here —
+  // it would throw on Android Chrome because the user gesture is gone by
+  // the time the fetch resolves.
+  async function prepareShare() {
+    if (sharingWhatsapp) return;
     if (!pdfUrl) {
       toast({ variant: 'destructive', title: 'PDF טרם נוצר' });
       return;
     }
     setSharingWhatsapp(true);
 
-    // Clean Hebrew message — no URL. The PDF goes in as a real attached
-    // file via the Web Share API. Filename is intentionally ASCII —
-    // Hebrew filenames cause Android Chrome's canShare() to return false
-    // silently, which drops us into the wa.me + URL fallback. The PDF
-    // itself still has "קבלה מספר 185" in its band, so the receipt is
-    // clearly identified once opened.
     const message =
       `היי ${customerName},\n` +
       `מצורפת ${docTitle}\n` +
@@ -171,65 +178,70 @@ export function DocumentActions({
       ? pdfUrl                                // direct signed storage URL ("מקור")
       : `/api/documents/${docId}/pdf-copy`;   // inline "נאמן למקור"
 
+    const navAny = navigator as any;
+    const hasShare = typeof navAny.share === 'function';
+
     try {
-      // Try the Web Share API first (mobile). On phones we NEVER fall back
-      // to wa.me + URL — the user explicitly wants a clean message + file.
-      // If share fails for any reason (other than user cancel), we surface
-      // a toast and stop, instead of silently dropping a public link in
-      // the message body.
-      const navAny = navigator as any;
-      const hasShare = typeof navAny.share === 'function';
-
-      if (hasShare) {
-        try {
-          const res = await fetch(sourceUrl);
-          if (!res.ok) throw new Error(`PDF fetch failed (HTTP ${res.status})`);
-          const blob = await res.blob();
-          // ASCII filename — Hebrew filenames make Android Chrome's
-          // canShare/share misbehave. The PDF body still has "קבלה מספר N"
-          // visible inside, so the receipt is clearly identified once opened.
-          const asciiType =
-            docType === 'invoice' ? 'Invoice' :
-            docType === 'invoice_receipt' ? 'Invoice-Receipt' :
-            docType === 'credit' ? 'Credit' : 'Kabala';
-          const filename = `${asciiType}-${documentNumber}.pdf`;
-          const file = new File([blob], filename, { type: 'application/pdf' });
-          await navAny.share({ files: [file], text: message, title: filename });
+      // Desktop (no Web Share API at all) — straight to wa.me + short link.
+      if (!hasShare) {
+        const linkRes = await fetch('/api/share-links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ ids: [docId], copyMode: isFirstSend ? 'original' : 'copy' }),
+        });
+        if (linkRes.ok) {
+          const { url: shortUrl } = (await linkRes.json()) as { url: string };
+          const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
+          const fallbackMsg = encodeURIComponent(message + '\n\n' + shortUrl);
+          const wa = phone ? `https://wa.me/${phone}?text=${fallbackMsg}` : `https://wa.me/?text=${fallbackMsg}`;
+          window.open(wa, '_blank');
           if (isFirstSend) await markSent('whatsapp');
-          return;
-        } catch (shareErr: any) {
-          if (shareErr?.name === 'AbortError') return; // user dismissed
-          toast({
-            variant: 'destructive',
-            title: 'השיתוף נכשל',
-            description: shareErr?.message ?? shareErr?.name ?? 'נסה שוב',
-          });
-          return;
+        } else {
+          toast({ variant: 'destructive', title: 'שגיאה — נסה שוב' });
         }
+        return;
       }
 
-      // Desktop fallback (no Web Share API): mint a short link and open
-      // WhatsApp Web. This path contains a URL — it's the only way to
-      // get the PDF to the recipient when there's no share sheet.
-      const linkRes = await fetch('/api/share-links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ ids: [docId], copyMode: isFirstSend ? 'original' : 'copy' }),
-      });
-      if (linkRes.ok) {
-        const { url: shortUrl } = (await linkRes.json()) as { url: string };
-        const phone = customerPhone ? customerPhone.replace(/\D/g, '').replace(/^0/, '972') : '';
-        const fallbackMsg = encodeURIComponent(message + '\n\n' + shortUrl);
-        const wa = phone ? `https://wa.me/${phone}?text=${fallbackMsg}` : `https://wa.me/?text=${fallbackMsg}`;
-        window.open(wa, '_blank');
-        if (isFirstSend) await markSent('whatsapp');
-      } else {
-        toast({ variant: 'destructive', title: 'שגיאה — נסה שוב' });
-      }
+      // Mobile — fetch the PDF and stash it. The user will click the green
+      // "שתף עכשיו" button next, and THAT click handler calls share() with
+      // no awaits in between.
+      const res = await fetch(sourceUrl);
+      if (!res.ok) throw new Error(`PDF fetch failed (HTTP ${res.status})`);
+      const blob = await res.blob();
+      const asciiType =
+        docType === 'invoice' ? 'Invoice' :
+        docType === 'invoice_receipt' ? 'Invoice-Receipt' :
+        docType === 'credit' ? 'Credit' : 'Kabala';
+      const filename = `${asciiType}-${documentNumber}.pdf`;
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      setPreparedShare({ file, message, filename, wasFirstSend: isFirstSend });
+      toast({ title: 'מוכן — לחץ "שתף עכשיו"' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'שגיאה', description: e?.message ?? '' });
     } finally {
       setSharingWhatsapp(false);
     }
+  }
+
+  // STEP 2: synchronous click handler — no awaits before share().
+  function shareNow() {
+    if (!preparedShare) return;
+    const { file, message, filename, wasFirstSend } = preparedShare;
+    const navAny = navigator as any;
+    navAny.share({ files: [file], text: message, title: filename })
+      .then(async () => {
+        if (wasFirstSend) await markSent('whatsapp');
+        setPreparedShare(null);
+      })
+      .catch((shareErr: any) => {
+        if (shareErr?.name === 'AbortError') return;
+        toast({
+          variant: 'destructive',
+          title: 'השיתוף נכשל',
+          description: shareErr?.message ?? shareErr?.name ?? 'נסה שוב',
+        });
+      });
   }
 
   // Record that the document was sent (first time only). The server-side
@@ -349,10 +361,24 @@ export function DocumentActions({
               <Mail className="h-4 w-4" />
               שלח במייל
             </Button>
-            <Button variant="outline" size="sm" onClick={shareWhatsApp} disabled={sharingWhatsapp}>
-              <MessageCircle className={`h-4 w-4 ${sharingWhatsapp ? 'animate-pulse' : ''}`} />
-              {sharingWhatsapp ? 'מכין...' : 'WhatsApp'}
-            </Button>
+            {preparedShare ? (
+              // STEP 2: synchronous click → share()
+              <Button
+                size="sm"
+                onClick={shareNow}
+                className="bg-green-600 hover:bg-green-700 animate-pulse"
+                title="לחץ עכשיו כדי לפתוח את WhatsApp"
+              >
+                <Share2 className="h-4 w-4" />
+                שתף עכשיו
+              </Button>
+            ) : (
+              // STEP 1: prepare PDF
+              <Button variant="outline" size="sm" onClick={prepareShare} disabled={sharingWhatsapp}>
+                <MessageCircle className={`h-4 w-4 ${sharingWhatsapp ? 'animate-pulse' : ''}`} />
+                {sharingWhatsapp ? 'מכין...' : 'WhatsApp'}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={shareBitRequest}>
               <Smartphone className="h-4 w-4" />
               בקשת ביט
