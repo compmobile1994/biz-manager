@@ -93,7 +93,8 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
 
       const message =
         `היי ${customerName},\n` +
-        `מצורפות ${files.length} קבלות מ-${businessName}.`;
+        `מצורפות ${files.length} קבלות\n` +
+        `מ-${businessName}.`;
 
       const navAny = navigator as any;
       if (files.length > 0 && navAny.canShare && navAny.canShare({ files })) {

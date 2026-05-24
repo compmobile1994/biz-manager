@@ -144,10 +144,12 @@ export function DocumentActions({
 
     // Short, clean Hebrew message — no emojis (they render as junk
     // characters in some WhatsApp/SMS receivers), no business name spam,
-    // no bank/Bit info (those have their own buttons).
+    // no bank/Bit info (those have their own buttons). docTitle already
+    // contains "קבלה #185" so we don't repeat the number.
     const message =
       `היי ${customerName},\n` +
-      `מצורפת ${docTitle} מספר ${documentNumber} מ-${businessName}.`;
+      `מצורפת ${docTitle}\n` +
+      `מ-${businessName}.`;
 
     // Try the modern Web Share API first — attaches the actual PDF as a
     // file together with the short Hebrew note. Works on Android Chrome
