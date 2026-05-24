@@ -120,10 +120,13 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
       const filename = count === 1 ? `Kabala-${singleNumber}.pdf` : `Kabalot-${count}.pdf`;
       const mergedFile = new File([mergedBlob], filename, { type: 'application/pdf' });
 
+      // User-set exact wording — 3 short lines, no customer name, no hyphen,
+      // no period. Same text for single or bulk — the merged file is
+      // shipped as one PDF either way.
       const message =
-        `היי ${customerName},\n` +
-        (count === 1 ? `מצורפת קבלה` : `מצורפות ${count} קבלות`) + `\n` +
-        `מ-${businessName}.`;
+        `היי\n` +
+        `מצורף קבלה\n` +
+        `מ${businessName}`;
 
       setPrepared({ file: mergedFile, message, filename, ids, firstSendIds, count });
 

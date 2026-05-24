@@ -168,10 +168,14 @@ export function DocumentActions({
     }
     setSharingWhatsapp(true);
 
+    // User-set exact wording — 3 short lines, no customer name, no hyphen,
+    // no period. Note "מצורף" (masc.) is intentional per user — refers to
+    // "the attached file (קובץ) which is a קבלה", and reads cleaner than
+    // "מצורפת" to him.
     const message =
-      `היי ${customerName},\n` +
-      `מצורפת ${docTitle}\n` +
-      `מ-${businessName}.`;
+      `היי\n` +
+      `מצורף קבלה\n` +
+      `מ${businessName}`;
 
     const isFirstSend = !localSentAt;
     const sourceUrl = isFirstSend
