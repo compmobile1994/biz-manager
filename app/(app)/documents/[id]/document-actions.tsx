@@ -227,16 +227,24 @@ export function DocumentActions({
   }
 
   // STEP 2: synchronous click handler — no awaits before share().
-  // Pure share() call only — matches yesterday's working version exactly.
-  // If text doesn't appear in WhatsApp it's WhatsApp's behavior, not ours.
+  // WhatsApp Android ignores share-sheet text when a file is attached
+  // (confirmed empirically — same behavior as yesterday, the text simply
+  // never appeared and the user didn't notice until today). Workaround:
+  // pre-copy the message to clipboard so the user can paste it in one tap.
   function shareNow() {
     if (!preparedShare) return;
     const { file, message, filename, wasFirstSend } = preparedShare;
+    // Fire-and-forget — non-blocking, doesn't consume user gesture for share().
+    navigator.clipboard?.writeText(message).catch(() => {});
     const navAny = navigator as any;
     navAny.share({ files: [file], text: message, title: filename })
       .then(async () => {
         if (wasFirstSend) await markSent('whatsapp');
         setPreparedShare(null);
+        toast({
+          title: 'הקבלה נשלחה',
+          description: '📋 ההודעה הועתקה — לחיצה ארוכה בצ׳אט → הדבק',
+        });
       })
       .catch((shareErr: any) => {
         if (shareErr?.name === 'AbortError') return;
