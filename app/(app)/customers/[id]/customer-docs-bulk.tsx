@@ -189,22 +189,16 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
   }
 
   // STEP 2: synchronous click handler — no awaits before share().
-  // We also pre-copy the message to clipboard so the user can paste it
-  // in WhatsApp — WhatsApp Android drops the share-sheet text when a file
-  // is attached, so this is the only reliable way to get the text through.
+  // Pure share() call only — matches yesterday's working version exactly.
+  // If text doesn't appear in WhatsApp it's WhatsApp's behavior, not ours.
   function shareNow() {
     if (!prepared) return;
     const { file, message, filename, firstSendIds, count } = prepared;
-    // Fire-and-forget clipboard write — non-blocking, doesn't lose gesture.
-    navigator.clipboard?.writeText(message).catch(() => {});
     const navAny = navigator as any;
     navAny.share({ files: [file], text: message, title: filename })
       .then(async () => {
         await markFirstSendsAsSent(firstSendIds);
-        toast({
-          title: `${count} קבלות נשלחו`,
-          description: '📋 ההודעה הועתקה — לחץ ארוך בשדה הצ׳אט והדבק',
-        });
+        toast({ title: `${count} קבלות נשלחו` });
         setPrepared(null);
         clearAll();
       })
