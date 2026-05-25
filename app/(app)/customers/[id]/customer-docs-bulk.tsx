@@ -132,9 +132,9 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
 
       // User-set exact wording — 3 short lines, with customer name on greeting
       // and receipt numbers (+ count when >1):
-      //   1 receipt  → "מצורף קבלה 185"
-      //   2 receipts → "מצורף 2 קבלות 178 ו-186"
-      //   3+ receipts → "מצורף 3 קבלות 178, 185 ו-186"
+      //   1 receipt  → "קיבלת קבלה מספר 185"
+      //   2 receipts → "קיבלת 2 קבלות מספר 178 ו-186"
+      //   3+ receipts → "קיבלת 3 קבלות מספר 178, 185 ו-186"
       let numbersStr: string;
       if (numbers.length <= 1) {
         numbersStr = numbers[0]?.toString() ?? '';
@@ -145,10 +145,10 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
         numbersStr = `${numbers.slice(0, -1).join(', ')} ו-${last}`;
       }
       const middle = count === 1
-        ? `מצורף קבלה ${numbersStr}`
-        : `מצורף ${count} קבלות ${numbersStr}`;
+        ? `קיבלת קבלה מספר ${numbersStr}`
+        : `קיבלת ${count} קבלות מספר ${numbersStr}`;
       const message =
-        `היי ${customerName}\n` +
+        `שלום ${customerName}\n` +
         `${middle}\n` +
         `מ${businessName}`;
 
@@ -189,14 +189,22 @@ export function CustomerDocsBulk({ docs, customerName, customerPhone, businessNa
   }
 
   // STEP 2: synchronous click handler — no awaits before share().
+  // We also pre-copy the message to clipboard so the user can paste it
+  // in WhatsApp — WhatsApp Android drops the share-sheet text when a file
+  // is attached, so this is the only reliable way to get the text through.
   function shareNow() {
     if (!prepared) return;
     const { file, message, filename, firstSendIds, count } = prepared;
+    // Fire-and-forget clipboard write — non-blocking, doesn't lose gesture.
+    navigator.clipboard?.writeText(message).catch(() => {});
     const navAny = navigator as any;
     navAny.share({ files: [file], text: message, title: filename })
       .then(async () => {
         await markFirstSendsAsSent(firstSendIds);
-        toast({ title: `${count} קבלות נשלחו` });
+        toast({
+          title: `${count} קבלות נשלחו`,
+          description: '📋 ההודעה הועתקה — לחץ ארוך בשדה הצ׳אט והדבק',
+        });
         setPrepared(null);
         clearAll();
       })

@@ -169,10 +169,10 @@ export function DocumentActions({
     setSharingWhatsapp(true);
 
     // User-set exact wording — 3 short lines, with customer name on greeting
-    // and the receipt number after "מצורף קבלה".
+    // and the receipt number after "קיבלת קבלה מספר".
     const message =
-      `היי ${customerName}\n` +
-      `מצורף קבלה ${documentNumber}\n` +
+      `שלום ${customerName}\n` +
+      `קיבלת קבלה מספר ${documentNumber}\n` +
       `מ${businessName}`;
 
     const isFirstSend = !localSentAt;
@@ -227,14 +227,25 @@ export function DocumentActions({
   }
 
   // STEP 2: synchronous click handler — no awaits before share().
+  // We also pre-copy the message to the clipboard so the user can paste
+  // it in WhatsApp manually — WhatsApp Android drops the share-sheet text
+  // when a file is attached, so this is the only reliable way to get the
+  // text through.
   function shareNow() {
     if (!preparedShare) return;
     const { file, message, filename, wasFirstSend } = preparedShare;
+    // Fire-and-forget clipboard write — non-blocking so we don't lose the
+    // user gesture for share() below.
+    navigator.clipboard?.writeText(message).catch(() => {});
     const navAny = navigator as any;
     navAny.share({ files: [file], text: message, title: filename })
       .then(async () => {
         if (wasFirstSend) await markSent('whatsapp');
         setPreparedShare(null);
+        toast({
+          title: 'הקבלה נשלחה',
+          description: '📋 ההודעה הועתקה — לחץ ארוך בשדה הצ׳אט והדבק',
+        });
       })
       .catch((shareErr: any) => {
         if (shareErr?.name === 'AbortError') return;
