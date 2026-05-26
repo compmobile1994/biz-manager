@@ -428,7 +428,11 @@ export function DocumentForm({
             transfer_ref: transferRef,
             other_description: otherDescription,
             needsPayment: docNeedsPayment,
-            expectedNumber: nextNumbers[docType] ?? 1,
+            // In historical mode the preview must show the user's typed
+            // number, not the live counter's next value.
+            expectedNumber: isHistorical && manualNumber
+              ? Number(manualNumber)
+              : (nextNumbers[docType] ?? 1),
           }}
           settings={settings}
           logoUrl={logoUrl}
