@@ -137,6 +137,11 @@ export function DocumentsList({ initial }: { initial: DocumentRow[] }) {
                       {d.status === 'cancelled' && (
                         <span className="text-destructive text-xs mr-2">(בוטל)</span>
                       )}
+                      {(d as any).is_historical && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-medium mr-2">
+                          היסטורי
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {d.customer_name_snapshot} · {formatDate(d.issue_date)}

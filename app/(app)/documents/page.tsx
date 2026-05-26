@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, FileEdit } from 'lucide-react';
+import { Plus, FileEdit, FileSpreadsheet } from 'lucide-react';
 import { DocumentsList } from './documents-list';
 import type { DocumentRow } from '@/lib/supabase/types';
 import { DraftsSection } from './drafts-section';
@@ -15,7 +15,7 @@ export default async function DocumentsPage() {
       .from('documents')
       // Only the columns the list-view actually renders. Avoids sending
       // pdf_url / notes / snapshots over the wire on every visit.
-      .select('id, document_type, number, customer_name_snapshot, issue_date, total, status')
+      .select('id, document_type, number, customer_name_snapshot, issue_date, total, status, is_historical')
       .order('issue_date', { ascending: false })
       .order('number', { ascending: false }),
     supabase
@@ -35,6 +35,12 @@ export default async function DocumentsPage() {
         </div>
         <div className="flex items-center gap-2">
           <RegenerateAllButton />
+          <Link href="/documents/import-historical">
+            <Button variant="outline" size="lg">
+              <FileSpreadsheet className="h-4 w-4" />
+              ייבוא היסטורי
+            </Button>
+          </Link>
           <Link href="/documents/new">
             <Button size="lg">
               <Plus className="h-4 w-4" />

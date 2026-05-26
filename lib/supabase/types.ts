@@ -92,6 +92,7 @@ export interface DocumentRow {
   pdf_url: string | null;
   sent_at: string | null;
   sent_via: string | null;
+  is_historical?: boolean;
   created_at: string;
 }
 
