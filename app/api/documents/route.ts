@@ -140,13 +140,10 @@ export async function POST(request: Request) {
     }
   }
 
-  // 5) יצירת PDF + העלאה ל-storage. במצב היסטורי לא בונים PDF —
-  //    הפנקס הנייר הוא המקור החוקי, ובניית PDF היא בזבוז זמן (במיוחד
-  //    כשהמשתמש מזין 93 קבלות ברצף).
-  if (isHistorical) {
-    revalidatePath('/documents');
-    return NextResponse.json({ id: doc.id, number });
-  }
+  // 5) יצירת PDF + העלאה ל-storage. גם להיסטוריים — המשתמש ביקש
+  //    כדי שיהיה עותק דיגיטלי לכל קבלת נייר. עלות זמן: ~3-5 שנ׳
+  //    נוספות לכל שמירה. הקריאה ה-PDF נכשלה? לא נופלים את ההזמנה —
+  //    אפשר ליצור מחדש מ-"צור PDF עכשיו" בעמוד המסמך.
   try {
     const { data: settings } = await supabase
       .from('business_settings')
