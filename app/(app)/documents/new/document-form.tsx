@@ -160,6 +160,13 @@ export function DocumentForm({
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId ?? null);
+  // Historical mode — for bulk-entering past-year receipts from a paper
+  // booklet. When ON: manual number input, no auto-redirect after save,
+  // no PDF generation, no draft, no document-counter bump. After each
+  // successful save the form clears (except for date + historical mode +
+  // manual number which auto-increments) so the user can chain entries.
+  const [isHistorical, setIsHistorical] = useState(false);
+  const [manualNumber, setManualNumber] = useState<string>('');
 
   async function saveDraft() {
     if (!customerName.trim() && lines.every((l) => !l.description.trim())) {
@@ -257,6 +264,13 @@ export function DocumentForm({
       toast({ variant: 'destructive', title: 'בכל שורה: תיאור, כמות חיובית ומחיר' });
       return false;
     }
+    if (isHistorical) {
+      const n = parseInt(manualNumber, 10);
+      if (!Number.isInteger(n) || n <= 0) {
+        toast({ variant: 'destructive', title: 'מספר קבלה ידני חובה (מספר חיובי)' });
+        return false;
+      }
+    }
     return true;
   }
 
@@ -275,6 +289,8 @@ export function DocumentForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          is_historical: isHistorical || undefined,
+          manual_number: isHistorical ? parseInt(manualNumber, 10) : undefined,
           document_type: docType,
           issue_date: issueDate,
           customer_id: customerId || null,
@@ -319,6 +335,37 @@ export function DocumentForm({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'שגיאה ביצירת המסמך');
       toast({ title: 'המסמך נוצר', description: `${documentTypeLabel[docType]} #${json.number}` });
+
+      // Historical-mode short-circuit: don't redirect. Clear most fields so
+      // the user can chain entries, increment the manual number for the
+      // next one, and stay on the form. We keep the date (likely same or
+      // close to the previous) and the historical toggle ON.
+      if (isHistorical) {
+        const justSaved = parseInt(manualNumber, 10);
+        setManualNumber(String(justSaved + 1));
+        setCustomerId('');
+        setCustomerName('');
+        setCustomerTaxId('');
+        setCustomerAddress('');
+        setCustomerEmail('');
+        setCustomerPhone('');
+        setNotes('');
+        setLines([emptyLine()]);
+        // Reset payment helpers but keep the chosen method (likely repeats)
+        setCardLast4('');
+        setCardHolder('');
+        setAuthCode('');
+        setCheckNumber('');
+        setCheckBank('');
+        setCheckBranch('');
+        setCheckAccount('');
+        setCheckDueDate('');
+        setTransferRef('');
+        setOtherDescription('');
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
       // Delete the draft (if any) now that the real document was issued.
       // We `await` here so the request reaches the server *before* the
       // navigation tears down the page — otherwise the fetch gets aborted
@@ -415,6 +462,31 @@ export function DocumentForm({
           📋 טיוטה נטענה — תאריך השמירה: <strong>{new Date(prefill.issue_date + 'T00:00:00').toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}</strong>
         </div>
       )}
+      {/* Historical mode toggle — for bulk-entering past-year receipts.
+          Doesn't touch the live counter, allows manual numbering, and
+          chain-clears the form after each save so the user can keep
+          typing the next one. */}
+      <Card className={isHistorical ? 'border-amber-400 bg-amber-50/40' : ''}>
+        <CardContent className="py-3 flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 cursor-pointer accent-amber-600"
+              checked={isHistorical}
+              onChange={(e) => {
+                setIsHistorical(e.target.checked);
+                // First-time toggle on: pre-fill manual number with last-used+1
+                // suggestion (just an empty string for now — user types whatever).
+                if (e.target.checked && !manualNumber) setManualNumber('');
+              }}
+            />
+            <span className="font-medium">מצב היסטורי</span>
+          </label>
+          <span className="text-xs text-muted-foreground">
+            להזנת קבלות מפנקס נייר משנה קודמת — מספור ידני, ללא PDF, בלי לשבור את המספור הרץ
+          </span>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>פרטי מסמך</CardTitle>
@@ -435,6 +507,23 @@ export function DocumentForm({
             <Label>תאריך</Label>
             <DatePicker value={issueDate} onChange={setIssueDate} />
           </div>
+          {isHistorical && (
+            <div className="space-y-1.5">
+              <Label>מספר קבלה (ידני)</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="לדוגמה: 50"
+                value={manualNumber}
+                onChange={(e) => {
+                  const clean = e.target.value.replace(/[^0-9]/g, '');
+                  setManualNumber(clean);
+                }}
+                autoFocus
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

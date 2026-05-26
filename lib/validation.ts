@@ -64,4 +64,10 @@ export const newDocumentSchema = z.object({
   notes: z.string().nullable().optional(),
   lines: z.array(lineSchema).min(1, 'נדרשת לפחות שורה אחת'),
   payment: paymentSchema.nullable().optional(),
+  // Historical mode — for back-filling past-year paper receipts.
+  // When is_historical=true, the server skips next_document_number RPC,
+  // uses manual_number as the receipt number, sets is_historical=true on
+  // the row, and skips PDF generation.
+  is_historical: z.boolean().optional(),
+  manual_number: z.number().int().positive().optional(),
 });

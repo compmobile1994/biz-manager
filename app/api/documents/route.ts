@@ -20,14 +20,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'invalid' }, { status: 400 });
   }
   const data = parsed.data;
+  const isHistorical = !!data.is_historical;
 
-  // 1) הקצאת מספר רץ אטומי
-  const { data: numberRpc, error: numErr } = await supabase.rpc('next_document_number', {
-    p_type: data.document_type,
-  });
-  if (numErr) return NextResponse.json({ error: numErr.message }, { status: 500 });
-
-  const number = Number(numberRpc);
+  // 1) הקצאת מספר. במצב היסטורי — מספר ידני בלי לגעת במונה. במצב רגיל —
+  //    קריאה ל-RPC האטומית שמקדמת את המונה.
+  let number: number;
+  if (isHistorical) {
+    if (!data.manual_number) {
+      return NextResponse.json({ error: 'manual_number required in historical mode' }, { status: 400 });
+    }
+    number = data.manual_number;
+  } else {
+    const { data: numberRpc, error: numErr } = await supabase.rpc('next_document_number', {
+      p_type: data.document_type,
+    });
+    if (numErr) return NextResponse.json({ error: numErr.message }, { status: 500 });
+    number = Number(numberRpc);
+  }
   const subtotal = data.lines.reduce((s, l) => s + l.line_total, 0);
   const total = subtotal;
 
@@ -47,10 +56,17 @@ export async function POST(request: Request) {
       total,
       notes: data.notes ?? null,
       status: 'issued',
+      is_historical: isHistorical,
     } as any)
     .select()
     .single();
-  if (docErr) return NextResponse.json({ error: docErr.message }, { status: 500 });
+  if (docErr) {
+    // duplicate-number on historical entry → friendly message
+    if (isHistorical && (docErr.code === '23505' || docErr.message?.toLowerCase().includes('duplicate'))) {
+      return NextResponse.json({ error: `קבלה ${number} כבר קיימת כהיסטורית. שנה מספר.` }, { status: 409 });
+    }
+    return NextResponse.json({ error: docErr.message }, { status: 500 });
+  }
 
   // Helper: roll back the orphaned `documents` row on any later failure so we
   // don't leave half-written receipts that look "issued" but have no items
@@ -65,6 +81,8 @@ export async function POST(request: Request) {
   const userId = user.id; // capture so the closure has a non-null type
   async function rollback() {
     await admin.from('documents').delete().eq('id', doc.id);
+    // In historical mode we never touched the counter, so nothing to undo.
+    if (isHistorical) return;
     // Optimistically roll the counter back only if it still matches the number
     // we burned. If another receipt was already issued after us, leave it
     // alone (the new number is the authoritative latest).
@@ -122,7 +140,13 @@ export async function POST(request: Request) {
     }
   }
 
-  // 5) יצירת PDF + העלאה ל-storage
+  // 5) יצירת PDF + העלאה ל-storage. במצב היסטורי לא בונים PDF —
+  //    הפנקס הנייר הוא המקור החוקי, ובניית PDF היא בזבוז זמן (במיוחד
+  //    כשהמשתמש מזין 93 קבלות ברצף).
+  if (isHistorical) {
+    revalidatePath('/documents');
+    return NextResponse.json({ id: doc.id, number });
+  }
   try {
     const { data: settings } = await supabase
       .from('business_settings')
