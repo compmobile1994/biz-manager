@@ -64,6 +64,11 @@ export const newDocumentSchema = z.object({
   notes: z.string().nullable().optional(),
   lines: z.array(lineSchema).min(1, 'נדרשת לפחות שורה אחת'),
   payment: paymentSchema.nullable().optional(),
+  // Split payments — when the user pays with two methods on one receipt
+  // (e.g. cash + bit). At least 1 entry, at most 4 (sane upper bound).
+  // If provided, the server inserts each entry as its own payments row
+  // and ignores the single `payment` field above.
+  payments: z.array(paymentSchema).min(1).max(4).optional(),
   // Historical mode — for back-filling past-year paper receipts.
   // When is_historical=true, the server skips next_document_number RPC,
   // uses manual_number as the receipt number, sets is_historical=true on

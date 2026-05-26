@@ -147,6 +147,23 @@ export function DocumentForm({
       : [emptyLine()],
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(prefill?.payment?.method ?? 'cash');
+  // Split-payment support: user can opt to pay with TWO methods on the same
+  // receipt (e.g. cash + bit, common in repair shops). When enabled, the
+  // user enters the amount for payment #1 explicitly and a 2nd payment
+  // block appears.
+  const [splitPayment, setSplitPayment] = useState(false);
+  const [payment1Amount, setPayment1Amount] = useState<string>('');
+  const [payment2Method, setPayment2Method] = useState<PaymentMethod>('bit');
+  const [payment2Amount, setPayment2Amount] = useState<string>('');
+  const [card2Last4, setCard2Last4] = useState('');
+  const [card2Holder, setCard2Holder] = useState('');
+  const [auth2Code, setAuth2Code] = useState('');
+  const [check2Number, setCheck2Number] = useState('');
+  const [check2Bank, setCheck2Bank] = useState('');
+  const [check2Account, setCheck2Account] = useState('');
+  const [check2DueDate, setCheck2DueDate] = useState('');
+  const [transfer2Ref, setTransfer2Ref] = useState('');
+  const [other2Description, setOther2Description] = useState('');
   const [cardLast4, setCardLast4] = useState(prefill?.payment?.card_last4 ?? '');
   const [cardHolder, setCardHolder] = useState(prefill?.payment?.card_holder ?? '');
   const [authCode, setAuthCode] = useState(prefill?.payment?.auth_code ?? '');
@@ -271,6 +288,26 @@ export function DocumentForm({
         return false;
       }
     }
+    if (docNeedsPayment && splitPayment) {
+      const a1 = Math.round(Number(payment1Amount));
+      const a2 = Math.round(Number(payment2Amount));
+      if (!Number.isFinite(a1) || a1 <= 0) {
+        toast({ variant: 'destructive', title: 'סכום תשלום ראשון חובה' });
+        return false;
+      }
+      if (!Number.isFinite(a2) || a2 <= 0) {
+        toast({ variant: 'destructive', title: 'סכום תשלום שני חובה' });
+        return false;
+      }
+      if (a1 + a2 !== Math.round(total)) {
+        toast({ variant: 'destructive', title: `סכום התשלומים (${a1 + a2}) חייב להיות שווה לסה״כ הקבלה (${Math.round(total)})` });
+        return false;
+      }
+      if (paymentMethod === payment2Method) {
+        toast({ variant: 'destructive', title: 'בחר שני אמצעי תשלום שונים' });
+        return false;
+      }
+    }
     return true;
   }
 
@@ -314,7 +351,7 @@ export function DocumentForm({
             warranty_provider: l.warranty_provider?.trim() || null,
             importer_type: l.importer_type || null,
           })),
-          payment: docNeedsPayment
+          payment: docNeedsPayment && !splitPayment
             ? {
                 method: paymentMethod,
                 amount: Math.round(total),
@@ -330,6 +367,38 @@ export function DocumentForm({
                 other_description: paymentMethod === 'other' ? otherDescription || null : null,
               }
             : null,
+          payments: docNeedsPayment && splitPayment
+            ? [
+                {
+                  method: paymentMethod,
+                  amount: Math.round(Number(payment1Amount)),
+                  card_last4: cardLast4 || null,
+                  card_holder: cardHolder || null,
+                  auth_code: authCode || null,
+                  check_number: checkNumber || null,
+                  check_bank: checkBank || null,
+                  check_branch: checkBranch || null,
+                  check_account: checkAccount || null,
+                  check_due_date: checkDueDate || null,
+                  transfer_ref: transferRef || null,
+                  other_description: paymentMethod === 'other' ? otherDescription || null : null,
+                },
+                {
+                  method: payment2Method,
+                  amount: Math.round(Number(payment2Amount)),
+                  card_last4: card2Last4 || null,
+                  card_holder: card2Holder || null,
+                  auth_code: auth2Code || null,
+                  check_number: check2Number || null,
+                  check_bank: check2Bank || null,
+                  check_branch: null,
+                  check_account: check2Account || null,
+                  check_due_date: check2DueDate || null,
+                  transfer_ref: transfer2Ref || null,
+                  other_description: payment2Method === 'other' ? other2Description || null : null,
+                },
+              ]
+            : undefined,
         }),
       });
       const json = await res.json();
@@ -632,11 +701,35 @@ export function DocumentForm({
       {docNeedsPayment && (
         <Card>
           <CardHeader>
-            <CardTitle>פרטי תשלום</CardTitle>
+            <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+              <span>פרטי תשלום</span>
+              <label className="flex items-center gap-2 text-sm font-normal cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer accent-blue-600"
+                  checked={splitPayment}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setSplitPayment(on);
+                    // When turning split ON, default payment-1 amount to the full
+                    // total and payment-2 to 0 so the user only has to override
+                    // one number. When turning OFF, clear both.
+                    if (on) {
+                      setPayment1Amount(String(Math.round(total)));
+                      setPayment2Amount('');
+                    } else {
+                      setPayment1Amount('');
+                      setPayment2Amount('');
+                    }
+                  }}
+                />
+                פצל ל-2 אמצעי תשלום
+              </label>
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>אופן תשלום</Label>
+              <Label>{splitPayment ? 'אמצעי תשלום #1' : 'אופן תשלום'}</Label>
               <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -646,6 +739,26 @@ export function DocumentForm({
                 </SelectContent>
               </Select>
             </div>
+            {splitPayment && (
+              <div className="space-y-1.5">
+                <Label>סכום תשלום #1 (₪)</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={payment1Amount}
+                  onChange={(e) => {
+                    const clean = e.target.value.replace(/[^0-9]/g, '');
+                    setPayment1Amount(clean);
+                    // Auto-fill payment #2 amount to whatever's left so it sums
+                    // to the receipt total. User can still override.
+                    const remaining = Math.round(total) - Number(clean || 0);
+                    if (remaining >= 0) setPayment2Amount(String(remaining));
+                  }}
+                  placeholder="לדוגמה: 450"
+                />
+              </div>
+            )}
 
             {paymentMethod === 'credit_card' && (
               <>
@@ -706,6 +819,97 @@ export function DocumentForm({
                   placeholder='לדוגמה: "קיזוז חוב", "שובר זיכוי", "החלפה"'
                 />
               </div>
+            )}
+
+            {splitPayment && (
+              <>
+                <div className="md:col-span-2 border-t pt-3 mt-1">
+                  <p className="text-sm font-semibold text-blue-700">אמצעי תשלום #2</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>אמצעי תשלום #2</Label>
+                  <Select value={payment2Method} onValueChange={(v) => setPayment2Method(v as PaymentMethod)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PAY_METHODS.map((m) => (
+                        <SelectItem key={m} value={m}>{paymentMethodLabel[m]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>סכום תשלום #2 (₪)</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={payment2Amount}
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/[^0-9]/g, '');
+                      setPayment2Amount(clean);
+                    }}
+                    placeholder="לדוגמה: 300"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {(() => {
+                      const a1 = Number(payment1Amount || 0);
+                      const a2 = Number(payment2Amount || 0);
+                      const sum = a1 + a2;
+                      const target = Math.round(total);
+                      if (sum === target) return <span className="text-green-700">✓ סכום מתאים לסה״כ הקבלה</span>;
+                      return <span className="text-amber-700">⚠ סכום נוכחי {sum} ₪ · יעד {target} ₪</span>;
+                    })()}
+                  </p>
+                </div>
+                {payment2Method === 'credit_card' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>4 ספרות אחרונות</Label>
+                      <Input maxLength={4} value={card2Last4} onChange={(e) => setCard2Last4(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>שם בעל הכרטיס</Label>
+                      <Input value={card2Holder} onChange={(e) => setCard2Holder(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>מס׳ אסמכתה</Label>
+                      <Input value={auth2Code} onChange={(e) => setAuth2Code(e.target.value)} />
+                    </div>
+                  </>
+                )}
+                {payment2Method === 'check' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>מספר צ׳ק</Label>
+                      <Input value={check2Number} onChange={(e) => setCheck2Number(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>בנק</Label>
+                      <Input value={check2Bank} onChange={(e) => setCheck2Bank(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>מספר חשבון</Label>
+                      <Input value={check2Account} onChange={(e) => setCheck2Account(e.target.value)} inputMode="numeric" />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label>תאריך פרעון</Label>
+                      <DatePicker value={check2DueDate} onChange={setCheck2DueDate} />
+                    </div>
+                  </>
+                )}
+                {payment2Method === 'bank_transfer' && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label>אסמכתת העברה</Label>
+                    <Input value={transfer2Ref} onChange={(e) => setTransfer2Ref(e.target.value)} />
+                  </div>
+                )}
+                {payment2Method === 'other' && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label>איך שולם? (חובה)</Label>
+                    <Input value={other2Description} onChange={(e) => setOther2Description(e.target.value)} />
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

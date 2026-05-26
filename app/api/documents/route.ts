@@ -117,23 +117,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: linesErr.message }, { status: 500 });
   }
 
-  // 4) תשלום (אם רלוונטי)
-  if (data.payment) {
-    const { error: payErr } = await supabase.from('payments').insert({
-      document_id: doc.id,
-      method: data.payment.method,
-      amount: data.payment.amount,
-      card_last4: data.payment.card_last4 ?? null,
-      card_holder: data.payment.card_holder ?? null,
-      auth_code: data.payment.auth_code ?? null,
-      check_number: data.payment.check_number ?? null,
-      check_bank: data.payment.check_bank ?? null,
-      check_branch: data.payment.check_branch ?? null,
-      check_account: data.payment.check_account ?? null,
-      check_due_date: data.payment.check_due_date ?? null,
-      transfer_ref: data.payment.transfer_ref ?? null,
-      other_description: data.payment.other_description ?? null,
-    });
+  // 4) תשלום / תשלומים (אם רלוונטי). אם הוגש מערך `payments` (פיצול
+  //    תשלום) — מוסיף שורה לכל אחד. אחרת — שורה יחידה מ-`payment`.
+  const paymentRows = data.payments && data.payments.length > 0
+    ? data.payments
+    : (data.payment ? [data.payment] : []);
+  if (paymentRows.length > 0) {
+    const { error: payErr } = await supabase.from('payments').insert(
+      paymentRows.map((p) => ({
+        document_id: doc.id,
+        method: p.method,
+        amount: p.amount,
+        card_last4: p.card_last4 ?? null,
+        card_holder: p.card_holder ?? null,
+        auth_code: p.auth_code ?? null,
+        check_number: p.check_number ?? null,
+        check_bank: p.check_bank ?? null,
+        check_branch: p.check_branch ?? null,
+        check_account: p.check_account ?? null,
+        check_due_date: p.check_due_date ?? null,
+        transfer_ref: p.transfer_ref ?? null,
+        other_description: p.other_description ?? null,
+      })),
+    );
     if (payErr) {
       await rollback();
       return NextResponse.json({ error: payErr.message }, { status: 500 });
@@ -170,6 +176,7 @@ export async function POST(request: Request) {
       doc,
       lines: data.lines,
       payment: data.payment ?? null,
+      payments: data.payments ?? null,
       settings: settingsForPdf,
     });
 
