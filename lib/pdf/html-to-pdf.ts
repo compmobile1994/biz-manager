@@ -87,23 +87,28 @@ interface GenerateArgs {
     warranty_provider?: string | null;
     importer_type?: 'official' | 'parallel' | null;
   }[];
-  payment: {
-    method: string;
-    amount: number;
-    card_last4?: string | null;
-    auth_code?: string | null;
-    check_number?: string | null;
-    check_bank?: string | null;
-    check_branch?: string | null;
-    check_account?: string | null;
-    check_due_date?: string | null;
-    transfer_ref?: string | null;
-    other_description?: string | null;
-  } | null;
+  // Either a single payment (legacy, backwards-compatible) or an array of
+  // split payments (cash + bit / cash + check / etc.) on the same receipt.
+  payment?: PaymentArg | null;
+  payments?: PaymentArg[] | null;
   settings: any;
 }
 
-export async function generateDocumentPdf({ doc, lines, payment, settings, copy }: GenerateArgs): Promise<Uint8Array> {
+interface PaymentArg {
+  method: string;
+  amount: number;
+  card_last4?: string | null;
+  auth_code?: string | null;
+  check_number?: string | null;
+  check_bank?: string | null;
+  check_branch?: string | null;
+  check_account?: string | null;
+  check_due_date?: string | null;
+  transfer_ref?: string | null;
+  other_description?: string | null;
+}
+
+export async function generateDocumentPdf({ doc, lines, payment, payments, settings, copy }: GenerateArgs): Promise<Uint8Array> {
   // Fetch logo + signature as data URLs so the page can include them inline
   // (avoids any auth / network dependency during the puppeteer render).
   const [logoDataUrl, signatureDataUrl] = await Promise.all([
@@ -120,7 +125,7 @@ export async function generateDocumentPdf({ doc, lines, payment, settings, copy 
   `;
 
   const html = buildReceiptHtml({
-    doc, lines, payment, settings, copy,
+    doc, lines, payment, payments, settings, copy,
     logoDataUrl, signatureDataUrl,
   }).replace('</style>', `${fontStyles}</style>`);
 

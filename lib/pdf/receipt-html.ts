@@ -3,6 +3,20 @@
 
 import { documentTypeLabel, paymentMethodLabel, formatCurrency, formatDate } from '@/lib/utils';
 
+interface PaymentEntry {
+  method: string;
+  amount: number;
+  card_last4?: string | null;
+  auth_code?: string | null;
+  check_number?: string | null;
+  check_bank?: string | null;
+  check_branch?: string | null;
+  check_account?: string | null;
+  check_due_date?: string | null;
+  transfer_ref?: string | null;
+  other_description?: string | null;
+}
+
 interface BuildArgs {
   doc: any;
   copy?: 'original' | 'copy';
@@ -18,19 +32,11 @@ interface BuildArgs {
     warranty_provider?: string | null;
     importer_type?: 'official' | 'parallel' | null;
   }[];
-  payment: {
-    method: string;
-    amount: number;
-    card_last4?: string | null;
-    auth_code?: string | null;
-    check_number?: string | null;
-    check_bank?: string | null;
-    check_branch?: string | null;
-    check_account?: string | null;
-    check_due_date?: string | null;
-    transfer_ref?: string | null;
-    other_description?: string | null;
-  } | null;
+  // payment is the legacy single-payment shape. payments (plural) is the new
+  // array form that supports split payments (e.g. cash + bit on one receipt).
+  // Callers may pass either; if both are passed, payments wins.
+  payment?: PaymentEntry | null;
+  payments?: PaymentEntry[] | null;
   settings: any;
   logoDataUrl?: string | null;
   signatureDataUrl?: string | null;
@@ -52,11 +58,19 @@ function safeHex(c: string | null | undefined, fallback = '#2563eb'): string {
   return /^#?[0-9a-fA-F]{6}$/.test(m.replace(/^#/, '')) ? (m.startsWith('#') ? m : `#${m}`) : fallback;
 }
 
-export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, signatureDataUrl, copy = 'original' }: BuildArgs): string {
+export function buildReceiptHtml({ doc, lines, payment, payments, settings, logoDataUrl, signatureDataUrl, copy = 'original' }: BuildArgs): string {
   const brand = safeHex(settings?.brand_color);
   const docLabel = documentTypeLabel[doc.document_type] ?? 'מסמך';
   const dateStr = formatDate(doc.issue_date);
   const total = lines.reduce((s, l) => s + l.line_total, 0);
+  // Normalize payment input — array takes priority. If only the legacy single
+  // shape was passed, lift it into a one-element array. Empty → no block.
+  const paymentsList: PaymentEntry[] = payments && payments.length > 0
+    ? payments
+    : (payment ? [payment] : []);
+  const paymentsTotal = paymentsList.reduce((s, p) => s + Number(p.amount ?? 0), 0);
+  // For the check details block — find a check payment if any.
+  const checkPayment = paymentsList.find((p) => p.method === 'check') ?? null;
 
   const isSingleSimple = lines.length === 1 && Number(lines[0].quantity) === 1;
 
@@ -117,29 +131,29 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
       </table>
     `;
 
-  // Detailed check panel (rendered only for method=check, shown under the payment table)
-  const checkDetailsBlock = payment && payment.method === 'check'
+  // Detailed check panel (rendered only if any payment is a check)
+  const checkDetailsBlock = checkPayment
     ? `
       <div style="margin-top:12px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:6px; background:#f8fafc; font-size:10pt;">
         <p style="font-weight:700; margin:0 0 8px;">פרטי הצ׳ק:</p>
         <table style="width:100%; font-size:10pt; line-height:1.7;">
           <tr>
-            <td style="color:#64748b; width:25%;">מספר צ׳ק:</td><td style="width:25%;">${escapeHtml(payment.check_number || '—')}</td>
-            <td style="color:#64748b; width:25%;">בנק:</td><td style="width:25%;">${escapeHtml(payment.check_bank || '—')}</td>
+            <td style="color:#64748b; width:25%;">מספר צ׳ק:</td><td style="width:25%;">${escapeHtml(checkPayment.check_number || '—')}</td>
+            <td style="color:#64748b; width:25%;">בנק:</td><td style="width:25%;">${escapeHtml(checkPayment.check_bank || '—')}</td>
           </tr>
           <tr>
-            <td style="color:#64748b;">מספר חשבון:</td><td>${escapeHtml(payment.check_account || '—')}</td>
-            <td style="color:#64748b;">תאריך פרעון:</td><td>${payment.check_due_date ? escapeHtml(formatDate(payment.check_due_date)) : '—'}</td>
+            <td style="color:#64748b;">מספר חשבון:</td><td>${escapeHtml(checkPayment.check_account || '—')}</td>
+            <td style="color:#64748b;">תאריך פרעון:</td><td>${checkPayment.check_due_date ? escapeHtml(formatDate(checkPayment.check_due_date)) : '—'}</td>
           </tr>
           <tr>
-            <td style="color:#64748b;">סכום:</td><td style="font-weight:700;" colspan="3">${escapeHtml(formatCurrency(payment.amount))}</td>
+            <td style="color:#64748b;">סכום:</td><td style="font-weight:700;" colspan="3">${escapeHtml(formatCurrency(checkPayment.amount))}</td>
           </tr>
         </table>
       </div>
     `
     : '';
 
-  const paymentBlock = payment
+  const paymentBlock = paymentsList.length > 0
     ? `
       <div style="margin-top:16px;">
         <p style="font-weight:700; font-size:11pt; margin:0 0 8px;">שולם באמצעות:</p>
@@ -152,21 +166,23 @@ export function buildReceiptHtml({ doc, lines, payment, settings, logoDataUrl, s
             </tr>
           </thead>
           <tbody>
-            <tr style="border-top:1px solid #e2e8f0;">
-              <td style="padding:8px;">${escapeHtml(paymentMethodLabel[payment.method] ?? payment.method)}${
-                payment.card_last4 ? ` (${escapeHtml(payment.card_last4)})` : ''
-              }${payment.auth_code ? ` · ${escapeHtml(payment.auth_code)}` : ''}${
-                payment.check_number ? ` · צ׳ק ${escapeHtml(payment.check_number)}` : ''
-              }${payment.transfer_ref ? ` · ${escapeHtml(payment.transfer_ref)}` : ''}${
-                payment.method === 'other' && payment.other_description ? ` · ${escapeHtml(payment.other_description)}` : ''
-              }</td>
-              <td style="padding:8px;">${dateStr}</td>
-              <td style="padding:8px;">${escapeHtml(formatCurrency(payment.amount))}</td>
-            </tr>
+            ${paymentsList.map((p) => `
+              <tr style="border-top:1px solid #e2e8f0;">
+                <td style="padding:8px;">${escapeHtml(paymentMethodLabel[p.method] ?? p.method)}${
+                  p.card_last4 ? ` (${escapeHtml(p.card_last4)})` : ''
+                }${p.auth_code ? ` · ${escapeHtml(p.auth_code)}` : ''}${
+                  p.check_number ? ` · צ׳ק ${escapeHtml(p.check_number)}` : ''
+                }${p.transfer_ref ? ` · ${escapeHtml(p.transfer_ref)}` : ''}${
+                  p.method === 'other' && p.other_description ? ` · ${escapeHtml(p.other_description)}` : ''
+                }</td>
+                <td style="padding:8px;">${dateStr}</td>
+                <td style="padding:8px;">${escapeHtml(formatCurrency(p.amount))}</td>
+              </tr>
+            `).join('')}
             <tr style="background:${brand}1f; font-weight:700; border-top:1px solid #e2e8f0;">
               <td style="padding:8px;">סה״כ שולם:</td>
               <td style="padding:8px;"></td>
-              <td style="padding:8px;">${escapeHtml(formatCurrency(payment.amount))}</td>
+              <td style="padding:8px;">${escapeHtml(formatCurrency(paymentsTotal))}</td>
             </tr>
           </tbody>
         </table>
