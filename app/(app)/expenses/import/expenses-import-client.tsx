@@ -143,7 +143,9 @@ export function ExpensesImportClient({
             ...r,
             date: r.date && r.date !== todayIso() ? r.date : (json.date ?? r.date),
             vendor: r.vendor || (json.vendor ?? ''),
-            amount: r.amount || (json.amount != null ? String(json.amount) : ''),
+            // Format with 2 decimals so trailing zeros aren't stripped
+            // (149.90 stays as "149.90", not "149.9").
+            amount: r.amount || (json.amount != null ? Number(json.amount).toFixed(2) : ''),
             categoryId: r.categoryId || (json.categoryId ?? ''),
             description: r.description || (json.description ?? ''),
             aiStatus: 'extracted',
@@ -221,14 +223,17 @@ export function ExpensesImportClient({
           // non-fatal — supplier creation failure doesn't block the expense
         }
 
-        // 3. Insert expense row
+        // 3. Insert expense row. Keep the user's agorot — Math.round here
+        //    would discard the decimal portion that the AI extracted from
+        //    the actual receipt total.
+        const amountNum = Number(Number(row.amount).toFixed(2));
         const { error: expErr } = await supabase.from('expenses').insert({
           user_id: user.id,
           expense_date: row.date,
           vendor: vendorTrim,
           supplier_id: supplierId,
           category_id: row.categoryId || null,
-          amount: Math.round(Number(row.amount)),
+          amount: amountNum,
           description: row.description || null,
           payment_method: null,
           reference: null,
@@ -302,7 +307,7 @@ export function ExpensesImportClient({
                   disabled={submitting || extracting}
                   className="bg-green-600 hover:bg-green-700"
                 >
-                  {submitting ? 'מייבא...' : `ייבא ${rows.length} הוצאות (₪${Math.round(totalAmount)})`}
+                  {submitting ? 'מייבא...' : `ייבא ${rows.length} הוצאות (₪${totalAmount.toFixed(2)})`}
                 </Button>
               </>
             )}

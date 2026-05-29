@@ -56,7 +56,7 @@ ${categoryList || '  (אין קטגוריות מוגדרות)'}
 החזר JSON עם השדות הבאים:
 - "date": תאריך הקבלה בפורמט YYYY-MM-DD. אם לא ברור, החזר null.
 - "vendor": שם הספק או החברה (לדוגמה "סלקום", "פז", "אופיס דיפו"). אם לא ברור, החזר null.
-- "amount": הסכום הכולל כמספר שלם (בש"ח). אם יש מע"מ, החזר את הסכום הסופי הכולל. אם לא ברור, החזר null.
+- "amount": הסכום הסופי המדויק שנכתב בקבלה (בש"ח), כולל אגורות. החזר מספר עשרוני עם 2 ספרות אחרי הנקודה (לדוגמה 149.90, 75.50, 200.00). אם יש מע"מ — החזר את הסכום הכולל אחרי מע"מ. אל תעגל לעולם — הסכום חייב להתאים בדיוק למה שכתוב על הקבלה. אם לא ברור, החזר null.
 - "categoryId": ה-id (UUID) של הקטגוריה המתאימה ביותר מהרשימה. אם אין התאמה ברורה — null.
 - "description": תיאור קצר של מה נקנה (לדוגמה "טעינת סלולר", "דלק", "ציוד משרדי"). מקסימום 50 תווים.
 
@@ -117,7 +117,13 @@ ${categoryList || '  (אין קטגוריות מוגדרות)'}
     const result = {
       date: typeof parsed.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) ? parsed.date : null,
       vendor: typeof parsed.vendor === 'string' && parsed.vendor.trim() ? parsed.vendor.trim() : null,
-      amount: typeof parsed.amount === 'number' && parsed.amount > 0 ? Math.round(parsed.amount) : null,
+      // Preserve the exact amount with agorot (2 decimal places). The DB
+      // column is numeric(12,2) so it stores cents natively. Math.round
+      // here would discard the user's agorot — explicit toFixed(2) keeps
+      // them while normalizing floating-point quirks (149.899999 → 149.90).
+      amount: typeof parsed.amount === 'number' && parsed.amount > 0
+        ? Number(parsed.amount.toFixed(2))
+        : null,
       categoryId: typeof parsed.categoryId === 'string' && parsed.categoryId.match(/^[0-9a-f-]{36}$/i)
         ? parsed.categoryId : null,
       description: typeof parsed.description === 'string' && parsed.description.trim()
