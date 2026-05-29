@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, Trash2, CheckCircle2, AlertCircle, FileText, Image as ImageIcon } from 'lucide-react';
+import { Upload, Trash2, CheckCircle2, AlertCircle, FileText, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,9 +19,27 @@ interface Row {
   amount: string;
   categoryId: string;
   description: string;
+  // AI extraction status (separate from the submit/import status)
+  aiStatus?: 'pending' | 'extracting' | 'extracted' | 'failed';
+  aiError?: string;
   // Per-row outcome after submission
   status?: 'pending' | 'ok' | 'error';
   errorMsg?: string;
+}
+
+// Convert a File to a base64 string (without the data: prefix), as expected
+// by the Anthropic vision API.
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const i = result.indexOf(',');
+      resolve(i >= 0 ? result.slice(i + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function uniqueId() {
@@ -45,6 +63,7 @@ export function ExpensesImportClient({
   const { toast } = useToast();
   const [rows, setRows] = useState<Row[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [results, setResults] = useState<{ ok: number; failed: number } | null>(null);
 
   function onFilesPicked(files: FileList | null) {
@@ -69,6 +88,77 @@ export function ExpensesImportClient({
 
   function removeRow(id: string) {
     setRows((cur) => cur.filter((r) => r.id !== id));
+  }
+
+  // Run Claude vision on every row that doesn't yet have a successful AI
+  // extraction. Sequential (not parallel) so we don't slam the API quota
+  // and the UI can show progress row-by-row. Each call is ~$0.005.
+  async function extractAll() {
+    if (extracting) return;
+    // Only process rows that aren't already filled successfully — lets the
+    // user re-run after adding more files.
+    const todo = rows.filter((r) => r.aiStatus !== 'extracted');
+    if (todo.length === 0) {
+      toast({ title: 'אין מה לחלץ — כל השורות כבר מולאו' });
+      return;
+    }
+    setExtracting(true);
+    let ok = 0;
+    let failed = 0;
+    for (const row of todo) {
+      // Mark this row as "extracting" so the badge spins / changes color
+      setRows((cur) => cur.map((r) => (r.id === row.id ? { ...r, aiStatus: 'extracting' } : r)));
+      try {
+        const base64 = await fileToBase64(row.file);
+        // Most receipts are JPEG/PNG. Claude vision supports png/jpeg/gif/webp.
+        // PDF support is more limited — fall back to the file's MIME and
+        // surface any API rejection as a per-row error.
+        const mime = row.file.type || 'application/octet-stream';
+        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
+          throw new Error('פורמט לא נתמך ל-AI: ' + mime + ' (השתמש ב-JPG/PNG)');
+        }
+        const res = await fetch('/api/expenses/ai-extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            fileBase64: base64,
+            mimeType: mime,
+            categories: categories.map((c) => ({ id: c.id, name: c.name })),
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? 'AI נכשל');
+
+        // Patch the row with whatever fields the model returned. Don't
+        // override fields the user already typed manually — preserve their
+        // edits if they pre-filled anything before pressing AI.
+        setRows((cur) => cur.map((r) => {
+          if (r.id !== row.id) return r;
+          return {
+            ...r,
+            date: r.date && r.date !== todayIso() ? r.date : (json.date ?? r.date),
+            vendor: r.vendor || (json.vendor ?? ''),
+            amount: r.amount || (json.amount != null ? String(json.amount) : ''),
+            categoryId: r.categoryId || (json.categoryId ?? ''),
+            description: r.description || (json.description ?? ''),
+            aiStatus: 'extracted',
+          };
+        }));
+        ok++;
+      } catch (e: any) {
+        setRows((cur) => cur.map((r) => (r.id === row.id
+          ? { ...r, aiStatus: 'failed', aiError: e?.message ?? 'שגיאה' }
+          : r)));
+        failed++;
+      }
+    }
+    setExtracting(false);
+    toast({
+      title: `מילוי אוטומטי הסתיים`,
+      description: `✅ ${ok} הצליחו · ${failed > 0 ? `❌ ${failed} נכשלו` : 'הכל מוכן'}`,
+      variant: failed > 0 ? 'destructive' : 'default',
+    });
   }
 
   async function importAll() {
@@ -193,13 +283,24 @@ export function ExpensesImportClient({
               </span>
             </label>
             {rows.length > 0 && (
-              <Button
-                onClick={importAll}
-                disabled={submitting}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {submitting ? 'מייבא...' : `ייבא ${rows.length} הוצאות (₪${Math.round(totalAmount)})`}
-              </Button>
+              <>
+                <Button
+                  onClick={extractAll}
+                  disabled={extracting || submitting}
+                  className="bg-purple-600 hover:bg-purple-700"
+                  title="מילוי אוטומטי של תאריך/ספק/סכום/קטגוריה ע״י Claude AI"
+                >
+                  <Sparkles className={`h-4 w-4 ${extracting ? 'animate-pulse' : ''}`} />
+                  {extracting ? 'מילוי AI...' : '🤖 מילוי אוטומטי'}
+                </Button>
+                <Button
+                  onClick={importAll}
+                  disabled={submitting || extracting}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {submitting ? 'מייבא...' : `ייבא ${rows.length} הוצאות (₪${Math.round(totalAmount)})`}
+                </Button>
+              </>
             )}
           </div>
         </CardContent>
@@ -231,6 +332,24 @@ export function ExpensesImportClient({
                           {row.file.name}
                         </span>
                         <span className="text-xs text-muted-foreground">({(row.file.size / 1024).toFixed(0)}KB)</span>
+                        {row.aiStatus === 'extracting' && (
+                          <span className="text-xs text-purple-700 flex items-center gap-1 animate-pulse">
+                            <Sparkles className="h-3 w-3" />
+                            AI...
+                          </span>
+                        )}
+                        {row.aiStatus === 'extracted' && (
+                          <span className="text-xs text-purple-700 flex items-center gap-1">
+                            <Sparkles className="h-3 w-3" />
+                            מולא ע״י AI
+                          </span>
+                        )}
+                        {row.aiStatus === 'failed' && (
+                          <span className="text-xs text-amber-700 flex items-center gap-1" title={row.aiError}>
+                            <AlertCircle className="h-3 w-3" />
+                            AI נכשל
+                          </span>
+                        )}
                         {row.status === 'ok' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
                         {row.status === 'error' && (
                           <span className="text-xs text-red-700 flex items-center gap-1">
