@@ -130,6 +130,17 @@ export interface Supplier {
   created_at: string;
 }
 
+export interface PrepaidDeposit {
+  id: string;
+  user_id: string;
+  supplier_id: string;
+  deposit_date: string;
+  amount: number;
+  notes: string | null;
+  receipt_url: string | null;
+  created_at: string;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -142,6 +153,7 @@ export type Database = {
       expense_categories: { Row: ExpenseCategory; Insert: Omit<ExpenseCategory, 'id'> & { id?: string }; Update: Partial<ExpenseCategory> };
       expenses: { Row: Expense; Insert: Omit<Expense, 'id'> & { id?: string }; Update: Partial<Expense> };
       suppliers: { Row: Supplier; Insert: Omit<Supplier, 'id' | 'created_at'> & { id?: string }; Update: Partial<Supplier> };
+      prepaid_deposits: { Row: PrepaidDeposit; Insert: Omit<PrepaidDeposit, 'id' | 'created_at'> & { id?: string }; Update: Partial<PrepaidDeposit> };
     };
     Functions: {
       next_document_number: { Args: { p_type: DocumentType }; Returns: number };

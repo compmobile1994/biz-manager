@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { ArrowRight, Mail, Phone, MapPin, Receipt, Truck } from 'lucide-react';
+import { ArrowRight, Mail, Phone, MapPin, Receipt, Truck, Wallet } from 'lucide-react';
+import { SupplierDepositsClient } from './deposits-client';
 
 export default async function SupplierDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,11 +20,18 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
 
   // Pull all expenses tied to this supplier (by FK or matching legacy
   // vendor text). category name is joined so the list reads clearly.
-  const { data: expenses } = await supabase
-    .from('expenses')
-    .select('id, expense_date, vendor, amount, description, payment_method, category:expense_categories(name, color)')
-    .or(`supplier_id.eq.${id},vendor.eq.${supplier.name}`)
-    .order('expense_date', { ascending: false });
+  const [{ data: expenses }, { data: deposits }] = await Promise.all([
+    supabase
+      .from('expenses')
+      .select('id, expense_date, vendor, amount, description, payment_method, category:expense_categories(name, color)')
+      .or(`supplier_id.eq.${id},vendor.eq.${supplier.name}`)
+      .order('expense_date', { ascending: false }),
+    supabase
+      .from('prepaid_deposits')
+      .select('id, deposit_date, amount, notes')
+      .eq('supplier_id', id)
+      .order('deposit_date', { ascending: false }),
+  ]);
 
   const list = expenses ?? [];
   const total = list.reduce((s: number, e: any) => s + Number(e.amount ?? 0), 0);
@@ -32,6 +40,15 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
   const totalThisYear = list
     .filter((e: any) => e.expense_date?.startsWith(String(thisYear)))
     .reduce((s: number, e: any) => s + Number(e.amount ?? 0), 0);
+
+  // Prepaid-balance math: total deposited minus total spent on this
+  // supplier. Only shown when there's at least one deposit — for the
+  // 99% of suppliers without prepaid balance it stays hidden so the
+  // UI doesn't get noisy.
+  const depositsList = deposits ?? [];
+  const totalDeposited = depositsList.reduce((s: number, d: any) => s + Number(d.amount ?? 0), 0);
+  const prepaidBalance = totalDeposited - total;
+  const hasPrepaid = depositsList.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -50,7 +67,7 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className={`grid grid-cols-1 ${hasPrepaid ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-3`}>
         <Card>
           <CardContent className="py-4 text-center">
             <p className="text-3xl font-bold">{formatCurrency(total)}</p>
@@ -69,7 +86,30 @@ export default async function SupplierDetailPage({ params }: { params: Promise<{
             <p className="text-xs text-muted-foreground">קנייה אחרונה</p>
           </CardContent>
         </Card>
+        {hasPrepaid && (
+          <Card className={prepaidBalance > 0 ? 'border-green-300 bg-green-50' : 'border-amber-300 bg-amber-50'}>
+            <CardContent className="py-4 text-center">
+              <p className={`text-3xl font-bold ${prepaidBalance > 0 ? 'text-green-700' : 'text-amber-700'} flex items-center justify-center gap-2`}>
+                <Wallet className="h-6 w-6" />
+                {formatCurrency(prepaidBalance)}
+              </p>
+              <p className="text-xs text-muted-foreground">יתרת מקדמה זמינה</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      {/* Prepaid deposits block — render the client component so the user
+          can add deposits inline without navigating away. Always visible
+          (so the user can record a first deposit), but compactly placed
+          right under the stat row. */}
+      <SupplierDepositsClient
+        supplierId={id}
+        supplierName={supplier.name}
+        initialDeposits={depositsList as any}
+        totalDeposited={totalDeposited}
+        totalSpent={total}
+      />
 
       <Card>
         <CardHeader>
