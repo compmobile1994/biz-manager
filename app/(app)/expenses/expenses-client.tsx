@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, X, Camera, FileText, Tag, TrendingDown } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Trash2, X, Camera, FileText, Tag, TrendingDown, Upload } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Expense, ExpenseCategory, PaymentMethod } from '@/lib/supabase/types';
 import { Button } from '@/components/ui/button';
@@ -248,10 +249,18 @@ export function ExpensesClient({
             ערוך קטגוריות
           </Button>
         </div>
-        <Button onClick={startNew}>
-          <Plus className="h-4 w-4" />
-          הוצאה חדשה
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/expenses/import">
+            <Button variant="outline">
+              <Upload className="h-4 w-4" />
+              ייבוא מרובה
+            </Button>
+          </Link>
+          <Button onClick={startNew}>
+            <Plus className="h-4 w-4" />
+            הוצאה חדשה
+          </Button>
+        </div>
       </div>
 
       <Card>
