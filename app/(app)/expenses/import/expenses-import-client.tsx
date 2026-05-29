@@ -110,12 +110,16 @@ export function ExpensesImportClient({
       setRows((cur) => cur.map((r) => (r.id === row.id ? { ...r, aiStatus: 'extracting' } : r)));
       try {
         const base64 = await fileToBase64(row.file);
-        // Most receipts are JPEG/PNG. Claude vision supports png/jpeg/gif/webp.
-        // PDF support is more limited — fall back to the file's MIME and
-        // surface any API rejection as a per-row error.
+        // Claude vision accepts images (jpeg/png/gif/webp) AND PDF via the
+        // "document" content type. The server route handles both — we just
+        // do an early sanity check so unsupported formats fail fast.
         const mime = row.file.type || 'application/octet-stream';
-        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mime)) {
-          throw new Error('פורמט לא נתמך ל-AI: ' + mime + ' (השתמש ב-JPG/PNG)');
+        const supported = [
+          'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+          'application/pdf',
+        ];
+        if (!supported.includes(mime)) {
+          throw new Error('פורמט לא נתמך ל-AI: ' + mime + ' (השתמש ב-JPG/PNG/PDF)');
         }
         const res = await fetch('/api/expenses/ai-extract', {
           method: 'POST',

@@ -67,6 +67,23 @@ ${categoryList || '  (אין קטגוריות מוגדרות)'}
 
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    // PDF support — Claude 3.5+ accepts PDFs via the "document" content
+    // type. Image formats (jpeg/png/gif/webp) go through "image". Anything
+    // else is rejected up front so the user gets a friendly error.
+    const isPdf = mimeType === 'application/pdf';
+    const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mimeType);
+    if (!isPdf && !isImage) {
+      return NextResponse.json({ error: `פורמט לא נתמך: ${mimeType}` }, { status: 400 });
+    }
+    const fileContent: any = isPdf
+      ? {
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
+        }
+      : {
+          type: 'image',
+          source: { type: 'base64', media_type: mimeType, data: fileBase64 },
+        };
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5',
       max_tokens: 500,
@@ -75,10 +92,7 @@ ${categoryList || '  (אין קטגוריות מוגדרות)'}
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mimeType as any, data: fileBase64 },
-            },
+            fileContent,
             { type: 'text', text: 'חלץ את הנתונים מהקבלה. החזר רק JSON.' },
           ],
         },
