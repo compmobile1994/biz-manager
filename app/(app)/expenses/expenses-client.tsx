@@ -34,7 +34,7 @@ export function ExpensesClient({
   const { toast } = useToast();
   const [list, setList] = useState<Expense[]>(initialExpenses);
   const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
-  const [editing, setEditing] = useState<Partial<Expense> & { _file?: File } | null>(null);
+  const [editing, setEditing] = useState<Partial<Expense> & { _file?: File; _isRefund?: boolean } | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [categoriesDialog, setCategoriesDialog] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -194,7 +194,12 @@ export function ExpensesClient({
   async function save() {
     if (saving) return; // double-submit guard
     if (!editing?.vendor?.trim()) return toast({ variant: 'destructive', title: 'שם הספק חובה' });
-    if (!editing?.amount || editing.amount <= 0) return toast({ variant: 'destructive', title: 'סכום חיובי נדרש' });
+    // Amount must be a nonzero number. For a refund (`_isRefund`) the input
+    // is displayed as positive but stored as negative — so accept either
+    // sign here and let the save step flip if needed.
+    if (editing?.amount == null || Number(editing.amount) === 0) {
+      return toast({ variant: 'destructive', title: 'סכום נדרש (לא יכול להיות 0)' });
+    }
     // Validate uploaded file size + type before sending it to storage
     if (editing._file) {
       const MAX = 8 * 1024 * 1024;
@@ -244,7 +249,13 @@ export function ExpensesClient({
         vendor: editing.vendor,
         supplier_id,
         category_id: editing.category_id ?? null,
-        amount: Math.round(Number(editing.amount)), // integer shekels — matches receipts
+        // Refund/credit toggle flips the sign on save. Keep agorot (no
+        // Math.round) so a refund of ₪149.90 stays ₪149.90, not 150.
+        amount: (() => {
+          const raw = Number(Number(editing.amount).toFixed(2));
+          const signed = editing._isRefund ? -Math.abs(raw) : Math.abs(raw);
+          return signed;
+        })(),
         description: editing.description ?? null,
         payment_method: editing.payment_method ?? null,
         reference: editing.reference ?? null,
@@ -352,11 +363,19 @@ export function ExpensesClient({
         <div className="space-y-2">
           {filtered.map((e) => {
             const cat = categories.find((c) => c.id === e.category_id);
+            const isRefund = Number(e.amount) < 0;
             return (
-              <Card key={e.id}>
+              <Card key={e.id} className={isRefund ? 'border-red-200 bg-red-50/30' : ''}>
                 <CardContent className="py-3 flex justify-between items-center">
                   <div>
-                    <p className="font-semibold">{e.vendor}</p>
+                    <p className="font-semibold flex items-center gap-2 flex-wrap">
+                      {e.vendor}
+                      {isRefund && (
+                        <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-[10px] font-medium">
+                          ↩ זיכוי
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(e.expense_date)}
                       {cat && ` · ${cat.name}`}
@@ -366,8 +385,14 @@ export function ExpensesClient({
                     {e.description && <p className="text-sm mt-1">{e.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold">{formatCurrency(Number(e.amount))}</span>
-                    <Button variant="ghost" size="icon" onClick={() => setEditing(e)}>
+                    <span className={`font-bold ${isRefund ? 'text-red-700' : ''}`}>
+                      {formatCurrency(Number(e.amount))}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditing({ ...e, _isRefund: Number(e.amount) < 0 })}
+                    >
                       <FileText className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => remove(e.id)}>
@@ -454,18 +479,36 @@ export function ExpensesClient({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>סכום (₪)</Label>
+                  <Label className="flex items-center gap-2 flex-wrap">
+                    <span>סכום (₪)</span>
+                    {editing._isRefund && (
+                      <span className="text-xs text-red-700 font-normal">↩ זיכוי / החזר</span>
+                    )}
+                  </Label>
                   <Input
                     type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
+                    inputMode="decimal"
                     placeholder="0"
-                    value={editing.amount || ''}
+                    // Show the absolute value — the sign is implied by the
+                    // refund checkbox. So a refund of ₪50 shows "50" in the
+                    // input but is stored as -50 on save.
+                    value={editing.amount != null ? String(Math.abs(Number(editing.amount))) || '' : ''}
                     onChange={(e) => {
-                      const clean = e.target.value.replace(/[^0-9]/g, '');
-                      setEditing({ ...editing, amount: clean === '' ? 0 : parseInt(clean, 10) });
+                      // Allow digits + one decimal point for agorot.
+                      const clean = e.target.value.replace(/[^0-9.]/g, '');
+                      const num = clean === '' ? 0 : Number(clean);
+                      setEditing({ ...editing, amount: num });
                     }}
                   />
+                  <label className="flex items-center gap-2 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer accent-red-600"
+                      checked={!!editing._isRefund}
+                      onChange={(e) => setEditing({ ...editing, _isRefund: e.target.checked })}
+                    />
+                    <span className="text-xs">🔄 זיכוי / החזר מספק (יישמר כסכום שלילי)</span>
+                  </label>
                 </div>
               </div>
               <div className="space-y-1.5">
