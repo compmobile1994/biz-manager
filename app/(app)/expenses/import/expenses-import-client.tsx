@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, Trash2, CheckCircle2, AlertCircle, FileText, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Upload, Trash2, CheckCircle2, AlertCircle, FileText, Image as ImageIcon, Sparkles, Camera } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -82,6 +82,71 @@ export function ExpensesImportClient({
     toast({ title: `נטענו ${newRows.length} קבצים — מלא את הפרטים` });
   }
 
+  // Camera capture path — one photo at a time. Each tap of "📷 צלם קבלה"
+  // adds the new photo as a row and immediately runs AI on it (background),
+  // so the user can keep snapping more receipts without waiting. By the
+  // time they finish snapping, the rows are typically already filled.
+  async function onCameraCapture(file: File) {
+    const newRow: Row = {
+      id: uniqueId(),
+      file,
+      date: todayIso(),
+      vendor: '',
+      amount: '',
+      categoryId: '',
+      description: '',
+    };
+    setRows((cur) => [...cur, newRow]);
+    setResults(null);
+    toast({ title: `📷 צילום נוסף — סה״כ ${rows.length + 1}` });
+    // Fire-and-forget the AI extraction. The user can keep snapping while
+    // this runs; sequential queueing in runAiOnRow protects the quota.
+    runAiOnRow(newRow).catch(() => {});
+  }
+
+  // Run Claude vision on a single row. Pulled out of extractAll so the
+  // camera flow can fire it per-photo and extractAll can loop over many.
+  async function runAiOnRow(row: Row) {
+    setRows((cur) => cur.map((r) => (r.id === row.id ? { ...r, aiStatus: 'extracting' } : r)));
+    try {
+      const mime = row.file.type || 'application/octet-stream';
+      const supported = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      if (!supported.includes(mime)) {
+        throw new Error('פורמט לא נתמך: ' + mime);
+      }
+      const base64 = await fileToBase64(row.file);
+      const res = await fetch('/api/expenses/ai-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          fileBase64: base64,
+          mimeType: mime,
+          categories: categories.map((c) => ({ id: c.id, name: c.name })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'AI נכשל');
+      setRows((cur) => cur.map((r) => {
+        if (r.id !== row.id) return r;
+        return {
+          ...r,
+          date: r.date && r.date !== todayIso() ? r.date : (json.date ?? r.date),
+          vendor: r.vendor || (json.vendor ?? ''),
+          amount: r.amount || (json.amount != null ? Number(json.amount).toFixed(2) : ''),
+          categoryId: r.categoryId || (json.categoryId ?? ''),
+          description: r.description || (json.description ?? ''),
+          aiStatus: 'extracted',
+        };
+      }));
+    } catch (e: any) {
+      setRows((cur) => cur.map((r) => (r.id === row.id
+        ? { ...r, aiStatus: 'failed', aiError: e?.message ?? 'שגיאה' }
+        : r)));
+      throw e;
+    }
+  }
+
   function updateRow(id: string, patch: Partial<Row>) {
     setRows((cur) => cur.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
@@ -95,8 +160,6 @@ export function ExpensesImportClient({
   // and the UI can show progress row-by-row. Each call is ~$0.005.
   async function extractAll() {
     if (extracting) return;
-    // Only process rows that aren't already filled successfully — lets the
-    // user re-run after adding more files.
     const todo = rows.filter((r) => r.aiStatus !== 'extracted');
     if (todo.length === 0) {
       toast({ title: 'אין מה לחלץ — כל השורות כבר מולאו' });
@@ -106,62 +169,16 @@ export function ExpensesImportClient({
     let ok = 0;
     let failed = 0;
     for (const row of todo) {
-      // Mark this row as "extracting" so the badge spins / changes color
-      setRows((cur) => cur.map((r) => (r.id === row.id ? { ...r, aiStatus: 'extracting' } : r)));
       try {
-        const base64 = await fileToBase64(row.file);
-        // Claude vision accepts images (jpeg/png/gif/webp) AND PDF via the
-        // "document" content type. The server route handles both — we just
-        // do an early sanity check so unsupported formats fail fast.
-        const mime = row.file.type || 'application/octet-stream';
-        const supported = [
-          'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-          'application/pdf',
-        ];
-        if (!supported.includes(mime)) {
-          throw new Error('פורמט לא נתמך ל-AI: ' + mime + ' (השתמש ב-JPG/PNG/PDF)');
-        }
-        const res = await fetch('/api/expenses/ai-extract', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({
-            fileBase64: base64,
-            mimeType: mime,
-            categories: categories.map((c) => ({ id: c.id, name: c.name })),
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? 'AI נכשל');
-
-        // Patch the row with whatever fields the model returned. Don't
-        // override fields the user already typed manually — preserve their
-        // edits if they pre-filled anything before pressing AI.
-        setRows((cur) => cur.map((r) => {
-          if (r.id !== row.id) return r;
-          return {
-            ...r,
-            date: r.date && r.date !== todayIso() ? r.date : (json.date ?? r.date),
-            vendor: r.vendor || (json.vendor ?? ''),
-            // Format with 2 decimals so trailing zeros aren't stripped
-            // (149.90 stays as "149.90", not "149.9").
-            amount: r.amount || (json.amount != null ? Number(json.amount).toFixed(2) : ''),
-            categoryId: r.categoryId || (json.categoryId ?? ''),
-            description: r.description || (json.description ?? ''),
-            aiStatus: 'extracted',
-          };
-        }));
+        await runAiOnRow(row);
         ok++;
-      } catch (e: any) {
-        setRows((cur) => cur.map((r) => (r.id === row.id
-          ? { ...r, aiStatus: 'failed', aiError: e?.message ?? 'שגיאה' }
-          : r)));
+      } catch {
         failed++;
       }
     }
     setExtracting(false);
     toast({
-      title: `מילוי אוטומטי הסתיים`,
+      title: 'מילוי אוטומטי הסתיים',
       description: `✅ ${ok} הצליחו · ${failed > 0 ? `❌ ${failed} נכשלו` : 'הכל מוכן'}`,
       variant: failed > 0 ? 'destructive' : 'default',
     });
@@ -270,14 +287,34 @@ export function ExpensesImportClient({
             <div className="space-y-2">
               <p className="font-semibold">איך זה עובד</p>
               <ol className="text-sm space-y-1 list-decimal mr-5">
-                <li>לחץ "בחר קבצים" — תוכל לסמן הרבה קבצי PDF/תמונה בבת אחת (Ctrl+A)</li>
-                <li>לכל קובץ תופיע שורה — מלא תאריך, ספק, סכום וקטגוריה</li>
-                <li>לחץ "ייבא הכל" — כל ההוצאות יישמרו והקבצים יעלו לאחסון</li>
-                <li>ספקים חדשים שיופיעו — יישמרו אוטומטית במאגר הספקים</li>
+                <li><strong>📷 צלם קבלה</strong> — לחיצה אחת לכל קבלה, AI קורא אוטומטית ברקע. תוכל לצלם כמה שתרצה ברצף.</li>
+                <li>או <strong>"בחר קבצים"</strong> — לבחירת תיקייה שלמה של PDF/תמונה בבת אחת</li>
+                <li>אם רק העלית קבצים (לא צילמת) — לחץ "🤖 מילוי אוטומטי"</li>
+                <li>בדוק שהשדות תקינים, תקן אם צריך</li>
+                <li>"ייבא הכל" — שמירה לכל ההוצאות</li>
               </ol>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap pt-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onCameraCapture(f);
+                  // Reset the input so the next "צלם" with the same camera
+                  // still fires onChange (browsers skip identical values).
+                  e.target.value = '';
+                }}
+              />
+              <span className="inline-flex items-center gap-2 rounded-md bg-purple-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-purple-700">
+                <Camera className="h-4 w-4" />
+                📷 צלם קבלה
+              </span>
+            </label>
             <label className="cursor-pointer">
               <input
                 type="file"
