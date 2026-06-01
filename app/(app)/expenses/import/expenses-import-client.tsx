@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PDFDocument } from 'pdf-lib';
 import { Upload, Trash2, CheckCircle2, AlertCircle, FileText, Image as ImageIcon, Sparkles, Camera } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,42 @@ interface Row {
   // Per-row outcome after submission
   status?: 'pending' | 'ok' | 'error';
   errorMsg?: string;
+}
+
+// Split a multi-page PDF into a list of single-page PDFs (each as its own
+// File). Treats every page as a separate invoice — matches the user's
+// scanner workflow where multiple receipts get batched into one PDF.
+// Returns the original file unchanged if it's a single-page PDF or not a
+// PDF at all (image, etc.).
+async function splitPdfIntoPages(file: File): Promise<File[]> {
+  if (file.type !== 'application/pdf') return [file];
+  try {
+    const buf = await file.arrayBuffer();
+    const src = await PDFDocument.load(buf);
+    const pageCount = src.getPageCount();
+    if (pageCount <= 1) return [file];
+    const baseName = file.name.replace(/\.pdf$/i, '');
+    const out: File[] = [];
+    for (let i = 0; i < pageCount; i++) {
+      const single = await PDFDocument.create();
+      const [page] = await single.copyPages(src, [i]);
+      single.addPage(page);
+      const bytes = await single.save();
+      // pdf-lib returns Uint8Array; cast to BlobPart for File constructor
+      // (TS narrowness around SharedArrayBuffer vs ArrayBuffer in some
+      // lib.dom.d.ts versions).
+      out.push(new File(
+        [bytes as BlobPart],
+        `${baseName}-עמוד-${i + 1}.pdf`,
+        { type: 'application/pdf' },
+      ));
+    }
+    return out;
+  } catch {
+    // Corrupted PDF / encrypted / etc — fall back to handing the whole
+    // thing to AI and let it fail loudly per-row if the format is bad.
+    return [file];
+  }
 }
 
 // Convert a File to a base64 string (without the data: prefix), as expected
@@ -66,9 +103,19 @@ export function ExpensesImportClient({
   const [extracting, setExtracting] = useState(false);
   const [results, setResults] = useState<{ ok: number; failed: number } | null>(null);
 
-  function onFilesPicked(files: FileList | null) {
+  async function onFilesPicked(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const newRows: Row[] = Array.from(files).map((f) => ({
+    // Split any multi-page PDFs into one-page-per-invoice. Most paper-receipt
+    // scanners batch many small receipts into a single PDF; this expands
+    // them so the AI sees one receipt per page.
+    const expanded: File[] = [];
+    let splits = 0;
+    for (const f of Array.from(files)) {
+      const pieces = await splitPdfIntoPages(f);
+      if (pieces.length > 1) splits += pieces.length;
+      expanded.push(...pieces);
+    }
+    const newRows: Row[] = expanded.map((f) => ({
       id: uniqueId(),
       file: f,
       date: todayIso(),
@@ -79,7 +126,10 @@ export function ExpensesImportClient({
     }));
     setRows((cur) => [...cur, ...newRows]);
     setResults(null);
-    toast({ title: `נטענו ${newRows.length} קבצים — מלא את הפרטים` });
+    toast({
+      title: `נטענו ${newRows.length} קבצים`,
+      description: splits > 0 ? `📄 PDF רב-עמודי פוצל ל-${splits} חשבוניות נפרדות` : 'מלא את הפרטים או לחץ "🤖 מילוי אוטומטי"',
+    });
   }
 
   // Camera capture path — one photo at a time. Each tap of "📷 צלם קבלה"
