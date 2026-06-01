@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trash2, X, Camera, FileText, Tag, TrendingDown, Upload } from 'lucide-react';
+import { Plus, Trash2, X, Camera, FileText, Tag, TrendingDown, Upload, Sparkles } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Expense, ExpenseCategory, PaymentMethod } from '@/lib/supabase/types';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,80 @@ export function ExpensesClient({
   const [newCategoryName, setNewCategoryName] = useState('');
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  // AI auto-fill state — flipped on while the receipt is being read, so the
+  // user sees a "🤖 קורא את הקבלה..." indicator. Doesn't block the form;
+  // the user can still type while AI is running and any field they edit
+  // manually won't be overwritten when the AI result comes back.
+  const [aiExtracting, setAiExtracting] = useState(false);
+
+  // Read a file as base64 (no data: prefix) for the AI extract API.
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const i = result.indexOf(',');
+        resolve(i >= 0 ? result.slice(i + 1) : result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Run Claude vision on the just-picked receipt and patch the editing form
+  // with whatever fields the model extracted. Empty/whitespace fields get
+  // filled; fields the user already typed are preserved (so re-running AI
+  // after manual edits doesn't clobber their work).
+  async function runAiExtract(file: File) {
+    if (aiExtracting) return;
+    setAiExtracting(true);
+    try {
+      const mime = file.type || 'application/octet-stream';
+      const supported = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+      if (!supported.includes(mime)) {
+        toast({ variant: 'destructive', title: 'פורמט לא נתמך ל-AI', description: mime });
+        return;
+      }
+      const base64 = await fileToBase64(file);
+      const res = await fetch('/api/expenses/ai-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          fileBase64: base64,
+          mimeType: mime,
+          categories: categories.map((c) => ({ id: c.id, name: c.name })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'AI נכשל');
+
+      setEditing((cur) => {
+        if (!cur) return cur;
+        // Empty-or-falsy check that treats 0 as "real value already typed" for
+        // amount (rare edge case but worth covering).
+        const isEmpty = (v: any) => v === undefined || v === null || v === '';
+        return {
+          ...cur,
+          expense_date: !cur.expense_date || cur.expense_date === new Date().toISOString().slice(0, 10)
+            ? (json.date ?? cur.expense_date)
+            : cur.expense_date,
+          vendor: isEmpty(cur.vendor) ? (json.vendor ?? cur.vendor) : cur.vendor,
+          amount: !cur.amount ? (json.amount ?? cur.amount) : cur.amount,
+          category_id: isEmpty(cur.category_id) ? (json.categoryId ?? cur.category_id) : cur.category_id,
+          description: isEmpty(cur.description) ? (json.description ?? cur.description) : cur.description,
+        };
+      });
+      toast({
+        title: '🤖 הקבלה נקראה',
+        description: 'בדוק את השדות לפני שמירה',
+      });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'AI נכשל', description: e?.message ?? '' });
+    } finally {
+      setAiExtracting(false);
+    }
+  }
 
   function humanizeError(msg: string | null | undefined): string {
     if (!msg) return 'שגיאה לא ידועה';
@@ -457,9 +531,15 @@ export function ExpensesClient({
                 <Textarea value={editing.description ?? ''} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>צילום / קובץ קבלה</Label>
+                <Label className="flex items-center gap-2 flex-wrap">
+                  <span>צילום / קובץ קבלה</span>
+                  <span className="text-xs text-purple-700 font-normal flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    מילוי אוטומטי ע״י AI לאחר בחירת קובץ
+                  </span>
+                </Label>
                 <div className="grid grid-cols-2 gap-2">
-                  {/* Camera capture (mobile) */}
+                  {/* Camera capture (mobile) — also kicks off AI extract */}
                   <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-md p-3 cursor-pointer hover:bg-accent text-center">
                     <Camera className="h-6 w-6" />
                     <span className="text-xs font-medium">📷 צלם קבלה</span>
@@ -468,10 +548,15 @@ export function ExpensesClient({
                       accept="image/*"
                       capture="environment"
                       className="hidden"
-                      onChange={(e) => setEditing({ ...editing, _file: e.target.files?.[0] })}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        setEditing((cur) => ({ ...cur, _file: f }));
+                        runAiExtract(f);
+                      }}
                     />
                   </label>
-                  {/* File upload (PDF email invoice / image from gallery) */}
+                  {/* File upload (PDF / gallery) — also kicks off AI extract */}
                   <label className="flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-md p-3 cursor-pointer hover:bg-accent text-center">
                     <FileText className="h-6 w-6" />
                     <span className="text-xs font-medium">📎 העלה קובץ / PDF</span>
@@ -479,10 +564,21 @@ export function ExpensesClient({
                       type="file"
                       accept="image/*,application/pdf"
                       className="hidden"
-                      onChange={(e) => setEditing({ ...editing, _file: e.target.files?.[0] })}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        setEditing((cur) => ({ ...cur, _file: f }));
+                        runAiExtract(f);
+                      }}
                     />
                   </label>
                 </div>
+                {aiExtracting && (
+                  <p className="text-xs text-purple-700 flex items-center gap-1 animate-pulse">
+                    <Sparkles className="h-3 w-3" />
+                    🤖 קורא את הקבלה...
+                  </p>
+                )}
                 {editing._file && <p className="text-xs text-muted-foreground">📎 {editing._file.name}</p>}
                 {editing.receipt_url && !editing._file && <p className="text-xs text-muted-foreground">📎 קובץ קיים</p>}
               </div>
